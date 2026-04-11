@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#042C53" />
+    <meta name="description" content="AI-powered EV charging site selection and revenue forecasting" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Blink Site Selector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 0; }
+
+      @keyframes blink-spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes fadeSlideIn {
+        from { opacity: 0; transform: translateY(14px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes scorePop {
+        0%   { transform: scale(0.7); opacity: 0; }
+        70%  { transform: scale(1.08); }
+        100% { transform: scale(1);   opacity: 1; }
+      }
+
+      .spinner {
+        width: 52px;
+        height: 52px;
+        border: 5px solid #E6F1FB;
+        border-top-color: #185FA5;
+        border-radius: 50%;
+        animation: blink-spin 0.75s linear infinite;
+      }
+
+      .fade-in {
+        animation: fadeSlideIn 0.5s ease forwards;
+      }
+      .score-pop {
+        animation: scorePop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+
+      input[type="range"] {
+        accent-color: #185FA5;
+        height: 6px;
+        cursor: pointer;
+      }
+      select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 20px;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      input:focus, select:focus {
+        outline: none;
+        border-color: #185FA5 !important;
+        box-shadow: 0 0 0 3px rgba(24, 95, 165, 0.15);
+      }
+
+      .bar-fill {
+        transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      /* V2 — mini agent spinner */
+      .agent-spinner {
+        border-radius: 50%;
+        animation: blink-spin 0.65s linear infinite;
+      }
+
+      /* V2 — pulse glow on Run AI Agents button */
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(4, 44, 83, 0.45); }
+        50%       { box-shadow: 0 0 0 10px rgba(4, 44, 83, 0); }
+      }
+      .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+      /* V2 — track line fill */
+      .track-fill {
+        transition: height 0.5s ease;
+      }
+
+      /* V2 — toast */
+      @keyframes toastIn {
+        from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+        to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+      }
+      .toast-pop { animation: toastIn 0.3s ease forwards; }
+    </style>
+    <script type="module" crossorigin src="/AI-Site-Selector/assets/index-Cv46CdMQ.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
