@@ -2,20 +2,24 @@ import { useState } from 'react';
 import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
+import MySitesPage from './pages/MySitesPage';
+
+type TabId = 'v1' | 'v2' | 'sites';
 
 interface Tab {
-  id: string;
+  id: TabId;
   label: string;
   sublabel: string;
 }
 
 const TABS: Tab[] = [
-  { id: 'v1', label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
-  { id: 'v2', label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
+  { id: 'v1',    label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
+  { id: 'v2',    label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
+  { id: 'sites', label: 'My Sites',   sublabel: 'Saved analyses' },
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('v1');
+  const [activeTab, setActiveTab] = useState<TabId>('v1');
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#EFF6FF' }}>
@@ -57,7 +61,11 @@ export default function App() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {activeTab === 'v1' ? <V1Page /> : <V2Page />}
+        {activeTab === 'v1' && <V1Page />}
+        {activeTab === 'v2' && <V2Page />}
+        {activeTab === 'sites' && (
+          <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
+        )}
       </main>
 
       <footer className="text-center text-xs text-gray-400 py-6">
