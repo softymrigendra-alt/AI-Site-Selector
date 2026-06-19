@@ -9,6 +9,8 @@ import { OnlineIndicator } from './components/OnlineIndicator';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useAuth } from './hooks/useAuth';
 import { signOut } from './lib/auth';
+import { TabPanel } from './components/AnimatedCard';
+import { AnimatePresence } from 'framer-motion';
 
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 
@@ -101,17 +103,23 @@ export default function App() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {activeTab === 'v1' && <V1Page />}
-        {activeTab === 'v2' && <V2Page />}
-        {activeTab === 'sites' && (
-          <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
-        )}
-        {activeTab === 'reports' && (
-          <Suspense fallback={<div className="text-center py-20 text-gray-400 text-sm">Loading charts…</div>}>
-            <ReportsPage />
-          </Suspense>
-        )}
-        {activeTab === 'admin' && <AdminPage />}
+        <AnimatePresence mode="wait">
+          {activeTab === 'v1' && <TabPanel tabKey="v1"><V1Page /></TabPanel>}
+          {activeTab === 'v2' && <TabPanel tabKey="v2"><V2Page /></TabPanel>}
+          {activeTab === 'sites' && (
+            <TabPanel tabKey="sites">
+              <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
+            </TabPanel>
+          )}
+          {activeTab === 'reports' && (
+            <TabPanel tabKey="reports">
+              <Suspense fallback={<div className="text-center py-20 text-gray-400 text-sm">Loading charts…</div>}>
+                <ReportsPage />
+              </Suspense>
+            </TabPanel>
+          )}
+          {activeTab === 'admin' && <TabPanel tabKey="admin"><AdminPage /></TabPanel>}
+        </AnimatePresence>
       </main>
 
       <footer className="text-center text-xs text-gray-400 py-6">
