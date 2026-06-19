@@ -1,135 +1,83 @@
-import { useState } from 'react';
-import { calculateROI, formatCurrency, formatMonths } from './utils/roiCalculator';
-import type { Agent, AgentStatus, V2Forecast, DemandLevel, RiskLevel } from './types';
+import { useState, lazy, Suspense } from 'react';
+import { runAgentPipeline } from './lib/agentOrchestrator';
+import { formatCurrency, formatMonths } from './utils/roiCalculator';
+import type { AgentId, AgentStatus, AgentUpdate, PipelineOutput } from './lib/agentOrchestrator';
 
-const AGENTS: Agent[] = [
-  {
-    id: 'site',
-    name: 'Site Intelligence',
-    icon: '🗺️',
-    description: 'Fetching competitors from AFDC + EV adoption from Data.gov',
-    durationMs: 1400,
-  },
-  {
-    id: 'utility',
-    name: 'Utility Rate',
-    icon: '⚡',
-    description: 'Querying EIA for local electricity $/kWh',
-    durationMs: 1200,
-  },
-  {
-    id: 'roi',
-    name: 'ROI Optimisation',
-    icon: '📈',
-    description: 'Calculating best charger type and count',
-    durationMs: 900,
-  },
-  {
-    id: 'market',
-    name: 'Market Watch',
-    icon: '🔭',
-    description: 'Checking EV adoption trends + available grants',
-    durationMs: 1100,
-  },
-  {
-    id: 'lead',
-    name: 'Lead Qualification',
-    icon: '🤖',
-    description: 'LLM scoring site + generating narrative insight',
-    durationMs: 1800,
-  },
-];
+// Leaflet is ~250 kB — lazy load so it doesn't bloat the initial bundle
+const SiteMap = lazy(() => import('./components/SiteMap').then((m) => ({ default: m.SiteMap })));
+const SiteMapPlaceholder = lazy(() => import('./components/SiteMap').then((m) => ({ default: m.SiteMapPlaceholder })));
 
-const MOCK_RESULTS = {
-  site: {
-    nearbyChargers: 3,
-    evAdoptionPct: 8.4,
-    competitorDistance: '0.6 miles',
-  },
-  utility: {
-    ratePerKwh: 0.14,
-    utilityName: 'ComEd (simulated)',
-    peakRate: 0.22,
-  },
-  roi: {
-    recommendedType: 'DC Fast' as const,
-    recommendedCount: 4,
-    reasoning: 'High footfall + moderate competitor density favours DC Fast over Level 2.',
-  },
-  market: {
-    evGrowthRate: '34% YoY',
-    availableGrants: ['NEVI Formula Program', 'IRA Section 30C'],
-    grantValue: '$40,000 potential',
-  },
-  lead: {
-    siteScore: 74,
-    confidenceLevel: 81,
-    aiInsight:
-      'This location demonstrates strong EV charging viability. Proximity to a shopping corridor with 34% annual EV growth and available NEVI grants significantly improves the investment case. Recommend proceeding with a 4-unit DC Fast deployment to capture commuter and shopper demand.',
-  },
-};
+// ─── Agent metadata (display only) ───────────────────────────────────────────
 
-interface AgentRowProps {
-  agent: Agent;
-  status: AgentStatus;
-  result: (typeof MOCK_RESULTS)[keyof typeof MOCK_RESULTS] | undefined;
+interface AgentMeta {
+  id: AgentId;
+  name: string;
+  icon: string;
+  description: string;
 }
 
-function AgentRow({ agent, status, result }: AgentRowProps) {
-  const statusStyles: Record<AgentStatus, { color: string; icon: string }> = {
-    idle:    { color: '#9CA3AF', icon: '○' },
-    running: { color: '#2563EB', icon: '◌' },
-    done:    { color: '#16A34A', icon: '✓' },
-    error:   { color: '#DC2626', icon: '✗' },
+const AGENT_META: AgentMeta[] = [
+  { id: 'site',    name: 'Site Intelligence',   icon: '🗺️', description: 'Geocoding address · fetching AFDC competitor stations · EV registrations' },
+  { id: 'utility', name: 'Utility Rate',        icon: '⚡', description: 'Querying EIA for state commercial electricity $/kWh' },
+  { id: 'roi',     name: 'ROI Optimisation',    icon: '📈', description: 'Selecting optimal charger type & count · running ROI model' },
+  { id: 'market',  name: 'Market Watch',        icon: '🔭', description: 'EV adoption trends · available grant programmes' },
+  { id: 'lead',    name: 'Lead Qualification',  icon: '🤖', description: 'LLM scoring site against benchmarks · generating insight' },
+];
+
+// ─── Agent Row ────────────────────────────────────────────────────────────────
+
+interface AgentRowProps {
+  meta: AgentMeta;
+  status: AgentStatus;
+  summary: string;
+  durationMs?: number;
+}
+
+function AgentRow({ meta, status, summary, durationMs }: AgentRowProps) {
+  const styles: Record<AgentStatus, { bg: string; border: string; dot: string; label: string }> = {
+    waiting: { bg: 'white',   border: '#E5E7EB', dot: '#9CA3AF', label: 'waiting' },
+    running: { bg: '#EFF6FF', border: '#BFDBFE', dot: '#2563EB', label: 'running' },
+    done:    { bg: '#F0FDF4', border: '#86EFAC', dot: '#16A34A', label: 'done' },
+    failed:  { bg: '#FEF2F2', border: '#FCA5A5', dot: '#DC2626', label: 'failed' },
   };
-  const s = statusStyles[status];
+  const s = styles[status];
 
   return (
     <div
-      className="flex items-start gap-3 p-3 rounded-xl border transition-all"
-      style={{
-        backgroundColor: status === 'done' ? '#F0FDF4' : status === 'running' ? '#EFF6FF' : 'white',
-        borderColor: status === 'done' ? '#86EFAC' : status === 'running' ? '#BFDBFE' : '#E5E7EB',
-      }}
+      className="flex items-start gap-3 p-3 rounded-xl border transition-all duration-300"
+      style={{ backgroundColor: s.bg, borderColor: s.border }}
     >
-      <div className="text-xl mt-0.5">{agent.icon}</div>
+      <div className="text-xl mt-0.5 flex-shrink-0">{meta.icon}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold" style={{ color: '#1A2332' }}>{agent.name}</span>
-          <span className="text-xs font-mono font-bold" style={{ color: s.color }}>
-            {s.icon} {status}
-          </span>
+          <span className="text-sm font-semibold" style={{ color: '#1A2332' }}>{meta.name}</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {durationMs !== undefined && (
+              <span className="text-xs text-gray-400">{(durationMs / 1000).toFixed(1)}s</span>
+            )}
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ backgroundColor: s.dot }}
+            />
+            <span className="text-xs font-mono" style={{ color: s.dot }}>{s.label}</span>
+          </div>
         </div>
-        <p className="text-xs text-gray-500 mt-0.5">{agent.description}</p>
-
+        <p className="text-xs text-gray-400 mt-0.5">{meta.description}</p>
         {status === 'running' && (
           <div className="mt-2 h-1 rounded-full bg-gray-200 overflow-hidden">
             <div className="h-1 rounded-full animate-pulse" style={{ width: '60%', backgroundColor: '#2563EB' }} />
           </div>
         )}
-
-        {status === 'done' && result && (
-          <div className="mt-2 text-xs text-gray-600 bg-white rounded-lg px-2 py-1 border border-gray-100">
-            {agent.id === 'site' && (() => {
-              const r = result as typeof MOCK_RESULTS.site;
-              return `${r.nearbyChargers} nearby chargers · EV adoption ${r.evAdoptionPct}% · nearest competitor ${r.competitorDistance}`;
-            })()}
-            {agent.id === 'utility' && (() => {
-              const r = result as typeof MOCK_RESULTS.utility;
-              return `${r.utilityName} · $${r.ratePerKwh}/kWh avg · $${r.peakRate}/kWh peak`;
-            })()}
-            {agent.id === 'roi' && (() => {
-              const r = result as typeof MOCK_RESULTS.roi;
-              return `Recommended: ${r.recommendedCount}× ${r.recommendedType} · ${r.reasoning}`;
-            })()}
-            {agent.id === 'market' && (() => {
-              const r = result as typeof MOCK_RESULTS.market;
-              return `EV growth ${r.evGrowthRate} · Grants: ${r.availableGrants.join(', ')} (${r.grantValue})`;
-            })()}
-            {agent.id === 'lead' && (() => {
-              const r = result as typeof MOCK_RESULTS.lead;
-              return `Site score ${r.siteScore}/100 · Confidence ${r.confidenceLevel}%`;
-            })()}
+        {(status === 'done' || status === 'failed') && summary && (
+          <div
+            className="mt-1.5 text-xs rounded-lg px-2 py-1 border"
+            style={{
+              backgroundColor: status === 'failed' ? '#FEF2F2' : 'white',
+              borderColor: status === 'failed' ? '#FCA5A5' : '#E5E7EB',
+              color: status === 'failed' ? '#DC2626' : '#374151',
+            }}
+          >
+            {summary}
           </div>
         )}
       </div>
@@ -137,90 +85,116 @@ function AgentRow({ agent, status, result }: AgentRowProps) {
   );
 }
 
-type AgentStatusMap = Partial<Record<string, AgentStatus>>;
-type AgentResultMap = Partial<Record<string, (typeof MOCK_RESULTS)[keyof typeof MOCK_RESULTS]>>;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildSummary(agentId: AgentId, data: AgentUpdate['data']): string {
+  if (!data) return '';
+  switch (agentId) {
+    case 'site': {
+      const d = data as import('./lib/agentOrchestrator').SiteAgentResult;
+      const city = d.geo ? `${d.geo.city}, ${d.geo.state}` : 'address geocoded';
+      return `${city} · ${d.nearbyCount} competitor station(s) · ${(d.evRegistrations?.evCount ?? 0).toLocaleString()} EVs registered`;
+    }
+    case 'utility': {
+      const d = data as import('./lib/agentOrchestrator').UtilityAgentResult;
+      return d.rate
+        ? `${d.rate.utilityName} · $${d.rate.ratePerKwh.toFixed(3)}/kWh avg · $${d.rate.peakRatePerKwh.toFixed(3)}/kWh peak`
+        : `US average rate applied: $${d.ratePerKwh.toFixed(3)}/kWh`;
+    }
+    case 'roi': {
+      const d = data as import('./lib/agentOrchestrator').ROIAgentResult;
+      return `${d.recommendedCount}× ${d.recommendedType} · ${formatCurrency(d.roi.monthlyNetRevenue)}/mo net · break-even ${formatMonths(d.roi.breakEvenMonths)}`;
+    }
+    case 'market': {
+      const d = data as import('./lib/agentOrchestrator').MarketAgentResult;
+      return `EV growth ${d.evGrowthRate} · ${d.availableGrants.length} grant(s) · ${d.grantValue}`;
+    }
+    case 'lead': {
+      const d = data as import('./lib/agentOrchestrator').LeadAgentResult;
+      return `Site score ${d.siteScore}/100 · ${d.qualification.toUpperCase()} · confidence ${d.confidenceLevel}%`;
+    }
+    default:
+      return '';
+  }
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+type Phase = 'idle' | 'running' | 'done' | 'error';
 
 export default function V2Page() {
   const [address, setAddress] = useState<string>('');
-  const [phase, setPhase] = useState<'idle' | 'running' | 'done'>('idle');
-  const [agentStatuses, setAgentStatuses] = useState<AgentStatusMap>({});
-  const [agentResults, setAgentResults] = useState<AgentResultMap>({});
-  const [forecast, setForecast] = useState<V2Forecast | null>(null);
-  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [statuses, setStatuses] = useState<Partial<Record<AgentId, AgentStatus>>>({});
+  const [summaries, setSummaries] = useState<Partial<Record<AgentId, string>>>({});
+  const [durations, setDurations] = useState<Partial<Record<AgentId, number>>>({});
+  const [output, setOutput] = useState<PipelineOutput | null>(null);
+  const [totalMs, setTotalMs] = useState<number>(0);
 
-  async function runAgents() {
-    if (!address.trim()) return;
+  async function handleRun() {
+    if (!address.trim() || phase === 'running') return;
     setPhase('running');
-    setAgentStatuses({});
-    setAgentResults({});
-    setForecast(null);
+    setStatuses({});
+    setSummaries({});
+    setDurations({});
+    setOutput(null);
 
     const start = Date.now();
-
-    for (const agent of AGENTS) {
-      setAgentStatuses((prev) => ({ ...prev, [agent.id]: 'running' }));
-      await new Promise<void>((r) => setTimeout(r, agent.durationMs));
-      setAgentStatuses((prev) => ({ ...prev, [agent.id]: 'done' }));
-      setAgentResults((prev) => ({ ...prev, [agent.id]: MOCK_RESULTS[agent.id as keyof typeof MOCK_RESULTS] }));
+    try {
+      const result = await runAgentPipeline(address, (update: AgentUpdate) => {
+        setStatuses((p) => ({ ...p, [update.agentId]: update.status }));
+        if (update.data) {
+          setSummaries((p) => ({ ...p, [update.agentId]: buildSummary(update.agentId, update.data) }));
+        }
+        if (update.error) {
+          setSummaries((p) => ({ ...p, [update.agentId]: `Failed: ${update.error}` }));
+        }
+        if (update.durationMs !== undefined) {
+          setDurations((p) => ({ ...p, [update.agentId]: update.durationMs! }));
+        }
+      });
+      setOutput(result);
+      setTotalMs(Date.now() - start);
+      setPhase('done');
+    } catch {
+      setPhase('error');
     }
-
-    setElapsedMs(Date.now() - start);
-
-    const roi = calculateROI({
-      chargerType: MOCK_RESULTS.roi.recommendedType,
-      targetChargers: MOCK_RESULTS.roi.recommendedCount,
-    });
-
-    const competitorRisk: RiskLevel =
-      MOCK_RESULTS.site.nearbyChargers > 5 ? 'high'
-      : MOCK_RESULTS.site.nearbyChargers > 2 ? 'medium'
-      : 'low';
-
-    const evDemandLevel: DemandLevel =
-      MOCK_RESULTS.site.evAdoptionPct > 10 ? 'high'
-      : MOCK_RESULTS.site.evAdoptionPct > 5 ? 'medium'
-      : 'low';
-
-    setForecast({
-      roi,
-      siteScore: MOCK_RESULTS.lead.siteScore,
-      confidenceLevel: MOCK_RESULTS.lead.confidenceLevel,
-      aiInsight: MOCK_RESULTS.lead.aiInsight,
-      competitorRisk,
-      evDemandLevel,
-      recommendation: MOCK_RESULTS.roi,
-    });
-
-    setPhase('done');
   }
+
+  const lead = output?.lead;
+  const roi = output?.roi;
+  const market = output?.market;
+  const site = output?.site;
 
   return (
     <div className="space-y-5">
-      {/* Header banner */}
+      {/* Header + search */}
       <div className="rounded-2xl p-5 text-white" style={{ backgroundColor: '#1A2332' }}>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold">V2 Agentic Pipeline</h2>
             <p className="text-sm mt-1" style={{ color: '#93C5FD' }}>
-              Enter an address — 5 AI agents automatically fetch competitor data, electricity rates, EV adoption stats, and generate an ROI forecast.
+              5 AI agents fetch live competitor data, electricity rates, EV registrations, and generate a real ROI forecast.
             </p>
           </div>
-          <span className="flex-shrink-0 text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
-            Simulated · Phase 1
+          <span
+            className="flex-shrink-0 text-xs px-2 py-1 rounded-full"
+            style={{ backgroundColor: phase === 'done' ? '#16A34A' : '#2563EB' }}
+          >
+            {phase === 'done' ? `✓ Live · ${(totalMs / 1000).toFixed(1)}s` : 'Live APIs'}
           </span>
         </div>
-
         <div className="mt-4 flex gap-3">
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && phase !== 'running' && void runAgents()}
+            onKeyDown={(e) => e.key === 'Enter' && phase !== 'running' && void handleRun()}
             placeholder="Enter site address (e.g. 400 N Michigan Ave, Chicago, IL)"
             className="flex-1 rounded-lg px-4 py-2.5 text-sm text-gray-900 border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
             disabled={phase === 'running'}
           />
           <button
-            onClick={() => void runAgents()}
+            onClick={() => void handleRun()}
             disabled={phase === 'running' || !address.trim()}
             className="px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-opacity disabled:opacity-50"
             style={{ backgroundColor: '#2563EB' }}
@@ -231,114 +205,166 @@ export default function V2Page() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Agent pipeline */}
+        {/* Agent pipeline column */}
         <div className="lg:col-span-2 space-y-2">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Agent Pipeline</h3>
-            {phase === 'done' && (
-              <span className="text-xs font-medium" style={{ color: '#16A34A' }}>
-                ✓ Complete in {(elapsedMs / 1000).toFixed(1)}s
-              </span>
-            )}
-          </div>
-          {AGENTS.map((agent) => (
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Agent Pipeline</h3>
+          {AGENT_META.map((meta) => (
             <AgentRow
-              key={agent.id}
-              agent={agent}
-              status={agentStatuses[agent.id] ?? 'idle'}
-              result={agentResults[agent.id]}
+              key={meta.id}
+              meta={meta}
+              status={statuses[meta.id] ?? 'waiting'}
+              summary={summaries[meta.id] ?? ''}
+              durationMs={durations[meta.id]}
             />
           ))}
         </div>
 
-        {/* Results */}
+        {/* Results column */}
         <div className="lg:col-span-3">
           {phase === 'idle' && (
             <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-12 flex flex-col items-center justify-center text-gray-400 text-center h-full">
               <span className="text-5xl mb-3">🤖</span>
-              <p className="font-medium">Enter an address to start the agent pipeline</p>
-              <p className="text-sm mt-1">All 5 agents run automatically — takes ~8 seconds</p>
+              <p className="font-medium">Enter an address to start the live pipeline</p>
+              <p className="text-sm mt-1">Agents call AFDC, EIA, and Nominatim APIs in real time</p>
             </div>
           )}
 
-          {phase === 'running' && !forecast && (
+          {phase === 'running' && !output && (
             <div className="bg-white rounded-2xl border border-gray-200 p-8 flex flex-col items-center justify-center text-center h-full">
               <div className="text-4xl mb-3 animate-bounce">⚡</div>
               <p className="font-semibold" style={{ color: '#2563EB' }}>Agents working…</p>
-              <p className="text-sm text-gray-400 mt-1">Fetching live data from AFDC, EIA, and Data.gov</p>
+              <p className="text-sm text-gray-400 mt-1">Fetching live data from AFDC, EIA, and Nominatim</p>
             </div>
           )}
 
-          {forecast && (
+          {phase === 'error' && (
+            <div className="bg-white rounded-2xl border border-red-200 p-8 flex flex-col items-center justify-center text-center">
+              <span className="text-4xl mb-3">⚠️</span>
+              <p className="font-semibold text-red-600">Pipeline failed</p>
+              <p className="text-sm text-gray-400 mt-1">Check your network connection and try again.</p>
+            </div>
+          )}
+
+          {output && lead && roi && market && (
             <div className="space-y-4">
+              {/* Recommendation banner */}
               <div className="rounded-xl p-4 text-white" style={{ backgroundColor: '#16A34A' }}>
                 <p className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-80">Agent Recommendation</p>
-                <p className="font-bold text-lg">
-                  {forecast.recommendation.recommendedCount}× {forecast.recommendation.recommendedType} Chargers
-                </p>
-                <p className="text-sm mt-1 opacity-90">{forecast.recommendation.reasoning}</p>
+                <p className="font-bold text-lg">{roi.recommendedCount}× {roi.recommendedType} Chargers</p>
+                <p className="text-sm mt-1 opacity-90">{roi.reasoning}</p>
               </div>
 
+              {/* ROI grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {(
-                  [
-                    { label: 'Setup Cost',   value: formatCurrency(forecast.roi.totalSetupCost) },
-                    { label: 'Monthly Net',  value: formatCurrency(forecast.roi.monthlyNetRevenue) },
-                    { label: 'Break-Even',   value: formatMonths(forecast.roi.breakEvenMonths) },
-                    { label: '3-Year Profit', value: formatCurrency(forecast.roi.year3NetProfit) },
-                  ] as const
-                ).map(({ label, value }) => (
+                {([
+                  { label: 'Setup Cost',    value: formatCurrency(roi.roi.totalSetupCost) },
+                  { label: 'Monthly Net',   value: formatCurrency(roi.roi.monthlyNetRevenue) },
+                  { label: 'Break-Even',    value: formatMonths(roi.roi.breakEvenMonths) },
+                  { label: '3-Year Profit', value: formatCurrency(roi.roi.year3NetProfit) },
+                ] as const).map(({ label, value }) => (
                   <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 text-center">
                     <p className="text-xs text-gray-500 mb-1">{label}</p>
-                    <p className="text-lg font-bold" style={{ color: '#1A2332' }}>{value}</p>
+                    <p className="text-base font-bold" style={{ color: '#1A2332' }}>{value}</p>
                   </div>
                 ))}
               </div>
 
+              {/* Scores + AI insight */}
               <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <h4 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>AI Scores</h4>
+                <h4 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>AI Assessment</h4>
                 <div className="grid grid-cols-3 gap-4 mb-3">
                   <div className="text-center">
-                    <p className="text-3xl font-bold" style={{ color: '#2563EB' }}>{forecast.siteScore}</p>
+                    <p className="text-3xl font-bold" style={{ color: '#2563EB' }}>{lead.siteScore}</p>
                     <p className="text-xs text-gray-500">Site Score</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-3xl font-bold" style={{ color: '#16A34A' }}>{forecast.confidenceLevel}%</p>
+                    <p className="text-3xl font-bold" style={{ color: '#16A34A' }}>{lead.confidenceLevel}%</p>
                     <p className="text-xs text-gray-500">Confidence</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-lg font-bold capitalize" style={{ color: '#D97706' }}>{forecast.evDemandLevel}</p>
-                    <p className="text-xs text-gray-500">EV Demand</p>
+                    <p
+                      className="text-base font-bold capitalize"
+                      style={{ color: lead.qualification === 'strong' ? '#16A34A' : lead.qualification === 'moderate' ? '#D97706' : '#DC2626' }}
+                    >
+                      {lead.qualification}
+                    </p>
+                    <p className="text-xs text-gray-500">Qualification</p>
                   </div>
                 </div>
                 <div className="rounded-lg p-3 text-sm leading-relaxed" style={{ backgroundColor: '#EFF6FF', color: '#1A2332' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#2563EB' }}>LLM Narrative (Phase 1: template → Phase 2: live Groq)</p>
-                  {forecast.aiInsight}
+                  <p className="text-xs font-medium mb-1" style={{ color: '#2563EB' }}>LLM Insight</p>
+                  {lead.aiInsight}
                 </div>
               </div>
 
+              {/* Live data sources */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <h4 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>Live Data Sources</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {site?.geo && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-500 font-bold">✓</span>
+                      <span className="text-gray-600">
+                        <span className="font-medium">Location:</span> {site.geo.city}, {site.geo.state}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500 font-bold">✓</span>
+                    <span className="text-gray-600">
+                      <span className="font-medium">Competitors:</span> {site?.nearbyCount ?? 0} within 5 miles (AFDC)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500 font-bold">✓</span>
+                    <span className="text-gray-600">
+                      <span className="font-medium">EV registrations:</span> {(site?.evRegistrations?.evCount ?? 0).toLocaleString()} (DOE)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={output.utility.rate ? 'text-green-500 font-bold' : 'text-amber-500 font-bold'}>
+                      {output.utility.rate ? '✓' : '~'}
+                    </span>
+                    <span className="text-gray-600">
+                      <span className="font-medium">Electricity:</span> ${output.utility.ratePerKwh.toFixed(3)}/kWh
+                      {output.utility.rate?.source ? ` (${output.utility.rate.source})` : ' (estimate)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Map — lazy loaded to keep initial bundle small */}
+              <Suspense fallback={<div className="rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 text-sm" style={{ height: 280 }}>Loading map…</div>}>
+                {site?.geo ? (
+                  <SiteMap
+                    lat={site.geo.lat}
+                    lng={site.geo.lng}
+                    siteAddress={site.geo.formattedAddress}
+                    competitors={site.competitors}
+                  />
+                ) : (
+                  <SiteMapPlaceholder reason="Address could not be geocoded — check spelling and try again." />
+                )}
+              </Suspense>
+
+              {/* Grants */}
               <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                 <h4 className="text-sm font-semibold mb-2" style={{ color: '#1A2332' }}>
-                  Available Grants{' '}
-                  <span className="text-xs font-normal text-gray-400">(Market Watch agent)</span>
+                  Available Grants <span className="text-xs font-normal text-gray-400">(Market Watch agent)</span>
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {MOCK_RESULTS.market.availableGrants.map((g) => (
-                    <span
-                      key={g}
-                      className="text-xs px-2 py-1 rounded-full border"
-                      style={{ backgroundColor: '#F0FDF4', color: '#16A34A', borderColor: '#86EFAC' }}
-                    >
+                  {market.availableGrants.map((g) => (
+                    <span key={g} className="text-xs px-2 py-1 rounded-full border"
+                      style={{ backgroundColor: '#F0FDF4', color: '#16A34A', borderColor: '#86EFAC' }}>
                       {g}
                     </span>
                   ))}
-                  <span
-                    className="text-xs px-2 py-1 rounded-full border font-semibold"
-                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', borderColor: '#BFDBFE' }}
-                  >
-                    {MOCK_RESULTS.market.grantValue}
+                  <span className="text-xs px-2 py-1 rounded-full border font-semibold"
+                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', borderColor: '#BFDBFE' }}>
+                    {market.grantValue}
                   </span>
                 </div>
+                <p className="text-xs text-gray-400 mt-2">Peak demand: {market.peakDemand}</p>
               </div>
             </div>
           )}
