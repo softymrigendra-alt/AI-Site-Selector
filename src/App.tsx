@@ -4,10 +4,13 @@ import V1Page from './V1Page';
 import V2Page from './V2Page';
 import MySitesPage from './pages/MySitesPage';
 import AdminPage from './pages/AdminPage';
-
-const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+import { AuthModal } from './components/AuthModal';
 import { OnlineIndicator } from './components/OnlineIndicator';
 import { useDarkMode } from './hooks/useDarkMode';
+import { useAuth } from './hooks/useAuth';
+import { signOut } from './lib/auth';
+
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 
 type TabId = 'v1' | 'v2' | 'sites' | 'reports' | 'admin';
 
@@ -28,9 +31,12 @@ const TABS: Tab[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('v1');
   const { isDark, setTheme } = useDarkMode();
+  const { user } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#EFF6FF' }}>
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
       <header style={{ backgroundColor: '#1A2332' }} className="text-white shadow-lg">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -50,9 +56,24 @@ export default function App() {
             >
               {isDark ? '☀️' : '🌙'}
             </button>
-            <span className="hidden sm:block text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
-              Phase 1
-            </span>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:block text-xs text-blue-200 truncate max-w-[120px]">{user.email}</span>
+                <button
+                  onClick={() => signOut()}
+                  className="text-xs px-2 py-1 rounded-lg transition-colors hover:bg-white/10 text-blue-200"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAuth(true)}
+                className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors hover:bg-white/10 border border-white/20 text-white"
+              >
+                Sign in
+              </button>
+            )}
           </div>
         </div>
       </header>
