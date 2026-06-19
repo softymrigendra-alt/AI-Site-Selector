@@ -1,0 +1,16 @@
+{
+  "name": "EV Site Selector",
+  "short_name": "EV Selector",
+  "description": "AI-powered EV charging site selection and ROI forecasting",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1A2332",
+  "theme_color": "#1A2332",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
