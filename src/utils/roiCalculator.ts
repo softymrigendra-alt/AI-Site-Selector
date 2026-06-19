@@ -1,6 +1,6 @@
-// All ROI math lives here — LLM never touches these numbers
+import type { ChargerType, ChargerConfig, ROIResult, SiteFormInput } from '../types';
 
-export const CHARGER_CONFIG = {
+export const CHARGER_CONFIG: Record<ChargerType, ChargerConfig> = {
   'Level 2 AC': {
     hardwareCost: 1200,
     installCost: 3000,
@@ -27,15 +27,9 @@ export const CHARGER_CONFIG = {
 const SITE_PREP_COST = 5000;
 const PERMIT_COST = 2500;
 const UTILIZATION_RATE = 0.65;
-const MONTHLY_SOFTWARE_FEE = 30; // per charger
+const MONTHLY_SOFTWARE_FEE = 30;
 
-/**
- * @param {object} input
- * @param {string} input.chargerType  - one of the CHARGER_CONFIG keys
- * @param {number} input.targetChargers
- * @returns {{ totalSetupCost, monthlyGrossRevenue, monthlyNetRevenue, breakEvenMonths, year1NetProfit, year3NetProfit, year5NetProfit }}
- */
-export function calculateROI(input) {
+export function calculateROI(input: Pick<SiteFormInput, 'chargerType' | 'targetChargers'>): ROIResult {
   const { chargerType, targetChargers } = input;
   const cfg = CHARGER_CONFIG[chargerType];
   if (!cfg) throw new Error(`Unknown charger type: ${chargerType}`);
@@ -56,7 +50,7 @@ export function calculateROI(input) {
   const breakEvenMonths =
     monthlyNetRevenue > 0 ? totalSetupCost / monthlyNetRevenue : Infinity;
 
-  const yearNProfit = (years) =>
+  const yearNProfit = (years: number) =>
     monthlyNetRevenue * years * 12 - totalSetupCost;
 
   return {
@@ -70,7 +64,7 @@ export function calculateROI(input) {
   };
 }
 
-export function formatCurrency(n) {
+export function formatCurrency(n: number): string {
   if (!isFinite(n)) return 'N/A';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -79,7 +73,7 @@ export function formatCurrency(n) {
   }).format(n);
 }
 
-export function formatMonths(n) {
+export function formatMonths(n: number): string {
   if (!isFinite(n)) return 'Never';
   if (n < 1) return '< 1 month';
   const years = Math.floor(n / 12);

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { calculateROI, formatCurrency, formatMonths, CHARGER_CONFIG } from './utils/roiCalculator';
+import type { SiteFormInput, SiteResult, RiskLevel, DemandLevel, ROIResult } from './types';
 
-const PROPERTY_TYPES = [
+const PROPERTY_TYPES: SiteFormInput['propertyType'][] = [
   'hotel', 'mall', 'parking', 'workplace', 'hospital', 'university', 'residential',
 ];
 
-const CHARGER_TYPES = Object.keys(CHARGER_CONFIG);
+const CHARGER_TYPES = Object.keys(CHARGER_CONFIG) as SiteFormInput['chargerType'][];
 
-const DEFAULT_FORM = {
+const DEFAULT_FORM: SiteFormInput = {
   address: '',
   propertyType: 'parking',
   parkingSpaces: 50,
@@ -16,7 +17,14 @@ const DEFAULT_FORM = {
   chargerType: 'DC Fast',
 };
 
-function StatCard({ label, value, sub, highlight }) {
+interface StatCardProps {
+  label: string;
+  value: string;
+  sub?: string;
+  highlight?: boolean;
+}
+
+function StatCard({ label, value, sub, highlight = false }: StatCardProps) {
   return (
     <div
       className="rounded-xl p-4 shadow-sm border"
@@ -33,13 +41,17 @@ function StatCard({ label, value, sub, highlight }) {
   );
 }
 
-function RiskBadge({ level }) {
-  const colors = {
+interface RiskBadgeProps {
+  level: RiskLevel | DemandLevel;
+}
+
+function RiskBadge({ level }: RiskBadgeProps) {
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
     low:    { bg: '#F0FDF4', text: '#16A34A', border: '#86EFAC' },
     medium: { bg: '#FFFBEB', text: '#D97706', border: '#FCD34D' },
     high:   { bg: '#FEF2F2', text: '#DC2626', border: '#FCA5A5' },
   };
-  const c = colors[level] || colors.medium;
+  const c = colors[level] ?? colors['medium']!;
   return (
     <span
       className="text-xs font-semibold px-2 py-0.5 rounded-full border capitalize"
@@ -50,8 +62,7 @@ function RiskBadge({ level }) {
   );
 }
 
-// Deterministic "AI" score — no LLM in Phase 0, but wired for V2
-function computeMockScore(form, roi) {
+function computeSiteScore(form: SiteFormInput, roi: ROIResult): number {
   let score = 50;
   if (form.dailyFootfall > 1000) score += 15;
   else if (form.dailyFootfall > 500) score += 8;
@@ -63,17 +74,27 @@ function computeMockScore(form, roi) {
   return Math.min(100, Math.max(0, score));
 }
 
-function computeMockRisk(form) {
+function computeCompetitorRisk(form: SiteFormInput): RiskLevel {
   if (form.dailyFootfall < 200) return 'high';
   if (form.dailyFootfall > 800) return 'low';
   return 'medium';
 }
 
-export default function V1Page() {
-  const [form, setForm] = useState(DEFAULT_FORM);
-  const [result, setResult] = useState(null);
+function buildInsight(form: SiteFormInput, roi: ROIResult, siteScore: number): string {
+  if (siteScore >= 70) {
+    return `This ${form.propertyType} location shows strong EV charging potential with ${form.dailyFootfall.toLocaleString()} daily visitors. Break-even at ${formatMonths(roi.breakEvenMonths)} is competitive for the market. Recommended to proceed with ${form.targetChargers} ${form.chargerType} units.`;
+  }
+  if (siteScore >= 50) {
+    return `Moderate potential at this ${form.propertyType} site. Consider increasing charger count or targeting higher-traffic hours to improve utilisation. Break-even projected at ${formatMonths(roi.breakEvenMonths)}.`;
+  }
+  return `This site presents challenges — low footfall reduces utilisation below optimal thresholds. Consider a smaller ${form.chargerType} deployment (1–2 units) to reduce capital risk before scaling.`;
+}
 
-  function handleChange(e) {
+export default function V1Page() {
+  const [form, setForm] = useState<SiteFormInput>(DEFAULT_FORM);
+  const [result, setResult] = useState<SiteResult | null>(null);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
@@ -84,27 +105,18 @@ export default function V1Page() {
     setResult(null);
   }
 
-  function handleSubmit(e) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const roi = calculateROI(form);
-    const siteScore = computeMockScore(form, roi);
-    const competitorRisk = computeMockRisk(form);
-    const evDemandLevel = form.dailyFootfall > 800 ? 'high' : form.dailyFootfall > 300 ? 'medium' : 'low';
-
-    const insight =
-      siteScore >= 70
-        ? `This ${form.propertyType} location shows strong EV charging potential with ${form.dailyFootfall.toLocaleString()} daily visitors. Break-even at ${formatMonths(roi.breakEvenMonths)} is competitive for the market. Recommended to proceed with ${form.targetChargers} ${form.chargerType} units.`
-        : siteScore >= 50
-        ? `Moderate potential at this ${form.propertyType} site. Consider increasing charger count or targeting higher-traffic hours to improve utilisation. Break-even projected at ${formatMonths(roi.breakEvenMonths)}.`
-        : `This site presents challenges — low footfall reduces utilisation below optimal thresholds. Consider a smaller ${form.chargerType} deployment (1–2 units) to reduce capital risk before scaling.`;
-
-    setResult({ roi, siteScore, competitorRisk, evDemandLevel, aiInsight: insight });
+    const siteScore = computeSiteScore(form, roi);
+    const competitorRisk = computeCompetitorRisk(form);
+    const evDemandLevel: DemandLevel = form.dailyFootfall > 800 ? 'high' : form.dailyFootfall > 300 ? 'medium' : 'low';
+    const aiInsight = buildInsight(form, roi, siteScore);
+    setResult({ roi, siteScore, competitorRisk, evDemandLevel, aiInsight });
   }
 
-  const labelClass = 'block text-sm font-medium mb-1' ;
-  const inputClass =
-    'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
-  const selectClass = inputClass;
+  const labelClass = 'block text-sm font-medium mb-1';
+  const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -128,7 +140,7 @@ export default function V1Page() {
 
             <div>
               <label className={labelClass}>Property Type</label>
-              <select name="propertyType" value={form.propertyType} onChange={handleChange} className={selectClass}>
+              <select name="propertyType" value={form.propertyType} onChange={handleChange} className={inputClass}>
                 {PROPERTY_TYPES.map((t) => (
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
@@ -148,14 +160,14 @@ export default function V1Page() {
 
             <div>
               <label className={labelClass}>Charger Type</label>
-              <select name="chargerType" value={form.chargerType} onChange={handleChange} className={selectClass}>
+              <select name="chargerType" value={form.chargerType} onChange={handleChange} className={inputClass}>
                 {CHARGER_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
               <p className="text-xs text-gray-400 mt-1">
                 {form.chargerType === 'Level 2 AC' && 'Hardware $1.2K · $8/session · 3/day avg'}
-                {form.chargerType === 'DC Fast' && 'Hardware $25K · $18/session · 8/day avg'}
+                {form.chargerType === 'DC Fast'    && 'Hardware $25K · $18/session · 8/day avg'}
                 {form.chargerType === 'Ultra-Fast' && 'Hardware $75K · $28/session · 12/day avg'}
               </p>
             </div>
@@ -186,26 +198,26 @@ export default function V1Page() {
           </div>
         ) : (
           <>
-            {/* ROI cards */}
             <div>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">ROI Forecast</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <StatCard label="Setup Cost" value={formatCurrency(result.roi.totalSetupCost)} />
-                <StatCard label="Monthly Net" value={formatCurrency(result.roi.monthlyNetRevenue)} sub="after OpEx" />
-                <StatCard label="Break-Even" value={formatMonths(result.roi.breakEvenMonths)} highlight />
+                <StatCard label="Setup Cost"   value={formatCurrency(result.roi.totalSetupCost)} />
+                <StatCard label="Monthly Net"  value={formatCurrency(result.roi.monthlyNetRevenue)} sub="after OpEx" />
+                <StatCard label="Break-Even"   value={formatMonths(result.roi.breakEvenMonths)} highlight />
                 <StatCard label="3-Year Profit" value={formatCurrency(result.roi.year3NetProfit)} sub="net of setup" />
               </div>
             </div>
 
-            {/* Year-over-year */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
               <h3 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>Year-by-Year Profit</h3>
               <div className="space-y-2">
-                {[
-                  { label: 'Year 1', val: result.roi.year1NetProfit },
-                  { label: 'Year 3', val: result.roi.year3NetProfit },
-                  { label: 'Year 5', val: result.roi.year5NetProfit },
-                ].map(({ label, val }) => {
+                {(
+                  [
+                    { label: 'Year 1', val: result.roi.year1NetProfit },
+                    { label: 'Year 3', val: result.roi.year3NetProfit },
+                    { label: 'Year 5', val: result.roi.year5NetProfit },
+                  ] as const
+                ).map(({ label, val }) => {
                   const maxVal = result.roi.year5NetProfit;
                   const pct = maxVal > 0 ? Math.max(0, (val / maxVal) * 100) : 0;
                   const isNeg = val < 0;
@@ -234,7 +246,6 @@ export default function V1Page() {
               </div>
             </div>
 
-            {/* Site intelligence */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
               <h3 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>Site Intelligence</h3>
               <div className="grid grid-cols-3 gap-3 mb-4">
@@ -243,26 +254,20 @@ export default function V1Page() {
                   <p className="text-xs text-gray-500">Site Score /100</p>
                 </div>
                 <div className="text-center">
-                  <div className="flex justify-center mb-1">
-                    <RiskBadge level={result.evDemandLevel} />
-                  </div>
+                  <div className="flex justify-center mb-1"><RiskBadge level={result.evDemandLevel} /></div>
                   <p className="text-xs text-gray-500">EV Demand</p>
                 </div>
                 <div className="text-center">
-                  <div className="flex justify-center mb-1">
-                    <RiskBadge level={result.competitorRisk} />
-                  </div>
+                  <div className="flex justify-center mb-1"><RiskBadge level={result.competitorRisk} /></div>
                   <p className="text-xs text-gray-500">Competitor Risk</p>
                 </div>
               </div>
-
               <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: '#EFF6FF', color: '#1A2332' }}>
-                <p className="font-medium text-xs mb-1" style={{ color: '#2563EB' }}>AI Insight (Phase 0: rule-based)</p>
+                <p className="font-medium text-xs mb-1" style={{ color: '#2563EB' }}>AI Insight (Phase 1: rule-based → Phase 2: live LLM)</p>
                 <p className="text-sm leading-relaxed">{result.aiInsight}</p>
               </div>
             </div>
 
-            {/* Assumptions */}
             <details className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
               <summary className="text-sm font-medium cursor-pointer text-gray-500 select-none">
                 Calculation Assumptions

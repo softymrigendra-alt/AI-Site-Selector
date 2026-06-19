@@ -3,17 +3,22 @@ import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
 
-const TABS = [
-  { id: 'v1', label: 'V1 Manual', sublabel: 'Enter data, instant forecast' },
+interface Tab {
+  id: string;
+  label: string;
+  sublabel: string;
+}
+
+const TABS: Tab[] = [
+  { id: 'v1', label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
   { id: 'v2', label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('v1');
+  const [activeTab, setActiveTab] = useState<string>('v1');
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#EFF6FF' }}>
-      {/* Header */}
       <header style={{ backgroundColor: '#1A2332' }} className="text-white shadow-lg">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -24,12 +29,11 @@ export default function App() {
             </div>
           </div>
           <span className="hidden sm:block text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
-            Phase 0 Prototype
+            Phase 1
           </span>
         </div>
       </header>
 
-      {/* Tab bar */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-5xl mx-auto px-4">
           <nav className="flex gap-1 pt-2">
@@ -52,13 +56,12 @@ export default function App() {
         </div>
       </div>
 
-      {/* Page content */}
       <main className="max-w-5xl mx-auto px-4 py-6">
         {activeTab === 'v1' ? <V1Page /> : <V2Page />}
       </main>
 
       <footer className="text-center text-xs text-gray-400 py-6">
-        Phase 0 Prototype · White-label EV Site Selection · Built with React + Vite
+        Phase 1 · White-label EV Site Selection · Built with React + Vite + TypeScript
       </footer>
     </div>
   );

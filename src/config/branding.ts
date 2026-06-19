@@ -1,6 +1,7 @@
-// White-label config — set VITE_COMPANY_NAME env var to customize
-export const branding = {
-  companyName: import.meta.env.VITE_COMPANY_NAME || 'EV Site Selector',
+import type { Branding } from '../types';
+
+export const branding: Branding = {
+  companyName: (import.meta.env['VITE_COMPANY_NAME'] as string | undefined) ?? 'EV Site Selector',
   tagline: 'AI-Powered Charging Site Selection & Revenue Forecasting',
   colors: {
     primary: '#1A2332',

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { calculateROI, formatCurrency, formatMonths } from './utils/roiCalculator';
+import type { Agent, AgentStatus, V2Forecast, DemandLevel, RiskLevel } from './types';
 
-const AGENTS = [
+const AGENTS: Agent[] = [
   {
     id: 'site',
     name: 'Site Intelligence',
@@ -39,7 +40,6 @@ const AGENTS = [
   },
 ];
 
-// Simulated agent results for Phase 0
 const MOCK_RESULTS = {
   site: {
     nearbyChargers: 3,
@@ -52,7 +52,7 @@ const MOCK_RESULTS = {
     peakRate: 0.22,
   },
   roi: {
-    recommendedType: 'DC Fast',
+    recommendedType: 'DC Fast' as const,
     recommendedCount: 4,
     reasoning: 'High footfall + moderate competitor density favours DC Fast over Level 2.',
   },
@@ -69,14 +69,20 @@ const MOCK_RESULTS = {
   },
 };
 
-function AgentRow({ agent, status, result }) {
-  const statusStyles = {
+interface AgentRowProps {
+  agent: Agent;
+  status: AgentStatus;
+  result: (typeof MOCK_RESULTS)[keyof typeof MOCK_RESULTS] | undefined;
+}
+
+function AgentRow({ agent, status, result }: AgentRowProps) {
+  const statusStyles: Record<AgentStatus, { color: string; icon: string }> = {
     idle:    { color: '#9CA3AF', icon: '○' },
     running: { color: '#2563EB', icon: '◌' },
     done:    { color: '#16A34A', icon: '✓' },
     error:   { color: '#DC2626', icon: '✗' },
   };
-  const s = statusStyles[status] || statusStyles.idle;
+  const s = statusStyles[status];
 
   return (
     <div
@@ -95,21 +101,35 @@ function AgentRow({ agent, status, result }) {
           </span>
         </div>
         <p className="text-xs text-gray-500 mt-0.5">{agent.description}</p>
+
         {status === 'running' && (
           <div className="mt-2 h-1 rounded-full bg-gray-200 overflow-hidden">
-            <div
-              className="h-1 rounded-full animate-pulse"
-              style={{ width: '60%', backgroundColor: '#2563EB' }}
-            />
+            <div className="h-1 rounded-full animate-pulse" style={{ width: '60%', backgroundColor: '#2563EB' }} />
           </div>
         )}
+
         {status === 'done' && result && (
           <div className="mt-2 text-xs text-gray-600 bg-white rounded-lg px-2 py-1 border border-gray-100">
-            {agent.id === 'site' && `${result.nearbyChargers} nearby chargers · EV adoption ${result.evAdoptionPct}% · nearest competitor ${result.competitorDistance}`}
-            {agent.id === 'utility' && `${result.utilityName} · $${result.ratePerKwh}/kWh avg · $${result.peakRate}/kWh peak`}
-            {agent.id === 'roi' && `Recommended: ${result.recommendedCount}× ${result.recommendedType} · ${result.reasoning}`}
-            {agent.id === 'market' && `EV growth ${result.evGrowthRate} · Grants: ${result.availableGrants.join(', ')} (${result.grantValue})`}
-            {agent.id === 'lead' && `Site score ${result.siteScore}/100 · Confidence ${result.confidenceLevel}%`}
+            {agent.id === 'site' && (() => {
+              const r = result as typeof MOCK_RESULTS.site;
+              return `${r.nearbyChargers} nearby chargers · EV adoption ${r.evAdoptionPct}% · nearest competitor ${r.competitorDistance}`;
+            })()}
+            {agent.id === 'utility' && (() => {
+              const r = result as typeof MOCK_RESULTS.utility;
+              return `${r.utilityName} · $${r.ratePerKwh}/kWh avg · $${r.peakRate}/kWh peak`;
+            })()}
+            {agent.id === 'roi' && (() => {
+              const r = result as typeof MOCK_RESULTS.roi;
+              return `Recommended: ${r.recommendedCount}× ${r.recommendedType} · ${r.reasoning}`;
+            })()}
+            {agent.id === 'market' && (() => {
+              const r = result as typeof MOCK_RESULTS.market;
+              return `EV growth ${r.evGrowthRate} · Grants: ${r.availableGrants.join(', ')} (${r.grantValue})`;
+            })()}
+            {agent.id === 'lead' && (() => {
+              const r = result as typeof MOCK_RESULTS.lead;
+              return `Site score ${r.siteScore}/100 · Confidence ${r.confidenceLevel}%`;
+            })()}
           </div>
         )}
       </div>
@@ -117,13 +137,16 @@ function AgentRow({ agent, status, result }) {
   );
 }
 
+type AgentStatusMap = Partial<Record<string, AgentStatus>>;
+type AgentResultMap = Partial<Record<string, (typeof MOCK_RESULTS)[keyof typeof MOCK_RESULTS]>>;
+
 export default function V2Page() {
-  const [address, setAddress] = useState('');
-  const [phase, setPhase] = useState('idle'); // idle | running | done
-  const [agentStatuses, setAgentStatuses] = useState({});
-  const [agentResults, setAgentResults] = useState({});
-  const [forecast, setForecast] = useState(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [address, setAddress] = useState<string>('');
+  const [phase, setPhase] = useState<'idle' | 'running' | 'done'>('idle');
+  const [agentStatuses, setAgentStatuses] = useState<AgentStatusMap>({});
+  const [agentResults, setAgentResults] = useState<AgentResultMap>({});
+  const [forecast, setForecast] = useState<V2Forecast | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
 
   async function runAgents() {
     if (!address.trim()) return;
@@ -134,27 +157,37 @@ export default function V2Page() {
 
     const start = Date.now();
 
-    // Run agents sequentially with simulated delays
     for (const agent of AGENTS) {
       setAgentStatuses((prev) => ({ ...prev, [agent.id]: 'running' }));
-      await new Promise((r) => setTimeout(r, agent.durationMs));
+      await new Promise<void>((r) => setTimeout(r, agent.durationMs));
       setAgentStatuses((prev) => ({ ...prev, [agent.id]: 'done' }));
-      setAgentResults((prev) => ({ ...prev, [agent.id]: MOCK_RESULTS[agent.id] }));
+      setAgentResults((prev) => ({ ...prev, [agent.id]: MOCK_RESULTS[agent.id as keyof typeof MOCK_RESULTS] }));
     }
 
     setElapsedMs(Date.now() - start);
 
-    // Calculate ROI using recommended charger config from agent
     const roi = calculateROI({
       chargerType: MOCK_RESULTS.roi.recommendedType,
       targetChargers: MOCK_RESULTS.roi.recommendedCount,
     });
 
+    const competitorRisk: RiskLevel =
+      MOCK_RESULTS.site.nearbyChargers > 5 ? 'high'
+      : MOCK_RESULTS.site.nearbyChargers > 2 ? 'medium'
+      : 'low';
+
+    const evDemandLevel: DemandLevel =
+      MOCK_RESULTS.site.evAdoptionPct > 10 ? 'high'
+      : MOCK_RESULTS.site.evAdoptionPct > 5 ? 'medium'
+      : 'low';
+
     setForecast({
       roi,
-      ...MOCK_RESULTS.lead,
-      competitorRisk: MOCK_RESULTS.site.nearbyChargers > 5 ? 'high' : MOCK_RESULTS.site.nearbyChargers > 2 ? 'medium' : 'low',
-      evDemandLevel: MOCK_RESULTS.site.evAdoptionPct > 10 ? 'high' : MOCK_RESULTS.site.evAdoptionPct > 5 ? 'medium' : 'low',
+      siteScore: MOCK_RESULTS.lead.siteScore,
+      confidenceLevel: MOCK_RESULTS.lead.confidenceLevel,
+      aiInsight: MOCK_RESULTS.lead.aiInsight,
+      competitorRisk,
+      evDemandLevel,
       recommendation: MOCK_RESULTS.roi,
     });
 
@@ -169,12 +202,11 @@ export default function V2Page() {
           <div>
             <h2 className="text-lg font-bold">V2 Agentic Pipeline</h2>
             <p className="text-sm mt-1" style={{ color: '#93C5FD' }}>
-              Enter an address — 5 AI agents automatically fetch competitor data, electricity rates, EV
-              adoption stats, and generate an ROI forecast.
+              Enter an address — 5 AI agents automatically fetch competitor data, electricity rates, EV adoption stats, and generate an ROI forecast.
             </p>
           </div>
           <span className="flex-shrink-0 text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
-            Simulated · Phase 0
+            Simulated · Phase 1
           </span>
         </div>
 
@@ -182,13 +214,13 @@ export default function V2Page() {
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && phase !== 'running' && runAgents()}
+            onKeyDown={(e) => e.key === 'Enter' && phase !== 'running' && void runAgents()}
             placeholder="Enter site address (e.g. 400 N Michigan Ave, Chicago, IL)"
             className="flex-1 rounded-lg px-4 py-2.5 text-sm text-gray-900 border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
             disabled={phase === 'running'}
           />
           <button
-            onClick={runAgents}
+            onClick={() => void runAgents()}
             disabled={phase === 'running' || !address.trim()}
             className="px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-opacity disabled:opacity-50"
             style={{ backgroundColor: '#2563EB' }}
@@ -213,7 +245,7 @@ export default function V2Page() {
             <AgentRow
               key={agent.id}
               agent={agent}
-              status={agentStatuses[agent.id] || 'idle'}
+              status={agentStatuses[agent.id] ?? 'idle'}
               result={agentResults[agent.id]}
             />
           ))}
@@ -239,7 +271,6 @@ export default function V2Page() {
 
           {forecast && (
             <div className="space-y-4">
-              {/* Recommendation banner */}
               <div className="rounded-xl p-4 text-white" style={{ backgroundColor: '#16A34A' }}>
                 <p className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-80">Agent Recommendation</p>
                 <p className="font-bold text-lg">
@@ -248,14 +279,15 @@ export default function V2Page() {
                 <p className="text-sm mt-1 opacity-90">{forecast.recommendation.reasoning}</p>
               </div>
 
-              {/* ROI grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: 'Setup Cost', value: formatCurrency(forecast.roi.totalSetupCost) },
-                  { label: 'Monthly Net', value: formatCurrency(forecast.roi.monthlyNetRevenue) },
-                  { label: 'Break-Even', value: formatMonths(forecast.roi.breakEvenMonths) },
-                  { label: '3-Year Profit', value: formatCurrency(forecast.roi.year3NetProfit) },
-                ].map(({ label, value }) => (
+                {(
+                  [
+                    { label: 'Setup Cost',   value: formatCurrency(forecast.roi.totalSetupCost) },
+                    { label: 'Monthly Net',  value: formatCurrency(forecast.roi.monthlyNetRevenue) },
+                    { label: 'Break-Even',   value: formatMonths(forecast.roi.breakEvenMonths) },
+                    { label: '3-Year Profit', value: formatCurrency(forecast.roi.year3NetProfit) },
+                  ] as const
+                ).map(({ label, value }) => (
                   <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 text-center">
                     <p className="text-xs text-gray-500 mb-1">{label}</p>
                     <p className="text-lg font-bold" style={{ color: '#1A2332' }}>{value}</p>
@@ -263,7 +295,6 @@ export default function V2Page() {
                 ))}
               </div>
 
-              {/* Scores */}
               <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                 <h4 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>AI Scores</h4>
                 <div className="grid grid-cols-3 gap-4 mb-3">
@@ -281,15 +312,14 @@ export default function V2Page() {
                   </div>
                 </div>
                 <div className="rounded-lg p-3 text-sm leading-relaxed" style={{ backgroundColor: '#EFF6FF', color: '#1A2332' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#2563EB' }}>LLM Narrative (Phase 0: template)</p>
+                  <p className="text-xs font-medium mb-1" style={{ color: '#2563EB' }}>LLM Narrative (Phase 1: template → Phase 2: live Groq)</p>
                   {forecast.aiInsight}
                 </div>
               </div>
 
-              {/* Grants */}
               <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                 <h4 className="text-sm font-semibold mb-2" style={{ color: '#1A2332' }}>
-                  Available Grants {' '}
+                  Available Grants{' '}
                   <span className="text-xs font-normal text-gray-400">(Market Watch agent)</span>
                 </h4>
                 <div className="flex flex-wrap gap-2">
