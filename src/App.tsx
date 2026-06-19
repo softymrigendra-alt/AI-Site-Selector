@@ -3,10 +3,11 @@ import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
 import MySitesPage from './pages/MySitesPage';
+import AdminPage from './pages/AdminPage';
 import { OnlineIndicator } from './components/OnlineIndicator';
 import { useDarkMode } from './hooks/useDarkMode';
 
-type TabId = 'v1' | 'v2' | 'sites';
+type TabId = 'v1' | 'v2' | 'sites' | 'admin';
 
 interface Tab {
   id: TabId;
@@ -18,6 +19,7 @@ const TABS: Tab[] = [
   { id: 'v1',    label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
   { id: 'v2',    label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
   { id: 'sites', label: 'My Sites',   sublabel: 'Saved analyses' },
+  { id: 'admin', label: 'Monitor',    sublabel: 'Agent pipeline health' },
 ];
 
 export default function App() {
@@ -80,10 +82,11 @@ export default function App() {
         {activeTab === 'sites' && (
           <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
         )}
+        {activeTab === 'admin' && <AdminPage />}
       </main>
 
       <footer className="text-center text-xs text-gray-400 py-6">
-        Phase 1 · White-label EV Site Selection · Built with React + Vite + TypeScript
+        Phase 2 · White-label EV Site Selection · Built with React + Vite + TypeScript
       </footer>
     </div>
   );
