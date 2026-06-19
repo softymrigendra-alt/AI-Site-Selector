@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { calculateROI, formatCurrency, formatMonths, CHARGER_CONFIG } from './utils/roiCalculator';
 import { saveSiteAnalysis } from './lib/supabase';
 import { Toast, useToast } from './components/Toast';
+import { ROIChatAssistant } from './components/ROIChatAssistant';
 import type { SiteFormInput, SiteResult, RiskLevel, DemandLevel, ROIResult } from './types';
 
 interface AIForecastResponse {
@@ -390,6 +391,7 @@ export default function V1Page() {
       </div>
     </div>
     <Toast toasts={toasts} onDismiss={dismissToast} />
+    {siteResult && <ROIChatAssistant siteResult={siteResult} />}
     </>
   );
 }
