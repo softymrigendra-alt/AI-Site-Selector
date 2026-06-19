@@ -2,6 +2,32 @@ import { useState } from 'react';
 import { calculateROI, formatCurrency, formatMonths, CHARGER_CONFIG } from './utils/roiCalculator';
 import type { SiteFormInput, SiteResult, RiskLevel, DemandLevel, ROIResult } from './types';
 
+interface AIForecastResponse {
+  siteScore: number;
+  evDemandLevel: DemandLevel;
+  competitorRisk: RiskLevel;
+  confidenceLevel: number;
+  aiInsight: string;
+}
+
+async function fetchAIForecast(
+  siteInput: SiteFormInput,
+  roiCalculation: ROIResult,
+): Promise<AIForecastResponse | null> {
+  try {
+    const res = await fetch('/api/forecast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteInput, roiCalculation }),
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return null;
+    return await res.json() as AIForecastResponse;
+  } catch {
+    return null;
+  }
+}
+
 const PROPERTY_TYPES: SiteFormInput['propertyType'][] = [
   'hotel', 'mall', 'parking', 'workplace', 'hospital', 'university', 'residential',
 ];
@@ -93,6 +119,7 @@ function buildInsight(form: SiteFormInput, roi: ROIResult, siteScore: number): s
 export default function V1Page() {
   const [form, setForm] = useState<SiteFormInput>(DEFAULT_FORM);
   const [result, setResult] = useState<SiteResult | null>(null);
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -105,14 +132,39 @@ export default function V1Page() {
     setResult(null);
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const roi = calculateROI(form);
-    const siteScore = computeSiteScore(form, roi);
-    const competitorRisk = computeCompetitorRisk(form);
-    const evDemandLevel: DemandLevel = form.dailyFootfall > 800 ? 'high' : form.dailyFootfall > 300 ? 'medium' : 'low';
-    const aiInsight = buildInsight(form, roi, siteScore);
-    setResult({ roi, siteScore, competitorRisk, evDemandLevel, aiInsight });
+
+    // Show ROI immediately with rule-based scores while AI loads
+    const fallbackScore = computeSiteScore(form, roi);
+    const fallbackRisk = computeCompetitorRisk(form);
+    const fallbackDemand: DemandLevel = form.dailyFootfall > 800 ? 'high' : form.dailyFootfall > 300 ? 'medium' : 'low';
+    setResult({
+      roi,
+      siteScore: fallbackScore,
+      competitorRisk: fallbackRisk,
+      evDemandLevel: fallbackDemand,
+      aiInsight: buildInsight(form, roi, fallbackScore),
+    });
+
+    // Fetch AI-enriched insight and scores, update in place
+    setAiLoading(true);
+    const ai = await fetchAIForecast(form, roi);
+    setAiLoading(false);
+    if (ai) {
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              siteScore: ai.siteScore,
+              competitorRisk: ai.competitorRisk,
+              evDemandLevel: ai.evDemandLevel,
+              aiInsight: ai.aiInsight,
+            }
+          : prev,
+      );
+    }
   }
 
   const labelClass = 'block text-sm font-medium mb-1';
@@ -263,7 +315,14 @@ export default function V1Page() {
                 </div>
               </div>
               <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: '#EFF6FF', color: '#1A2332' }}>
-                <p className="font-medium text-xs mb-1" style={{ color: '#2563EB' }}>AI Insight (Phase 1: rule-based → Phase 2: live LLM)</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="font-medium text-xs" style={{ color: '#2563EB' }}>
+                    AI Insight
+                  </p>
+                  {aiLoading && (
+                    <span className="text-xs text-blue-400 animate-pulse">· enriching with LLM…</span>
+                  )}
+                </div>
                 <p className="text-sm leading-relaxed">{result.aiInsight}</p>
               </div>
             </div>
