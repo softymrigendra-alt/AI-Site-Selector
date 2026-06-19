@@ -3,6 +3,7 @@ import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
 import MySitesPage from './pages/MySitesPage';
+import { OnlineIndicator } from './components/OnlineIndicator';
 
 type TabId = 'v1' | 'v2' | 'sites';
 
@@ -32,9 +33,12 @@ export default function App() {
               <p className="text-xs leading-tight" style={{ color: '#93C5FD' }}>{branding.tagline}</p>
             </div>
           </div>
-          <span className="hidden sm:block text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
-            Phase 1
-          </span>
+          <div className="flex items-center gap-2">
+            <OnlineIndicator />
+            <span className="hidden sm:block text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
+              Phase 1
+            </span>
+          </div>
         </div>
       </header>
 
