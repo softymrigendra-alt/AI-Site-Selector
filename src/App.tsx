@@ -4,6 +4,7 @@ import V1Page from './V1Page';
 import V2Page from './V2Page';
 import MySitesPage from './pages/MySitesPage';
 import { OnlineIndicator } from './components/OnlineIndicator';
+import { useDarkMode } from './hooks/useDarkMode';
 
 type TabId = 'v1' | 'v2' | 'sites';
 
@@ -21,6 +22,7 @@ const TABS: Tab[] = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('v1');
+  const { isDark, setTheme } = useDarkMode();
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#EFF6FF' }}>
@@ -35,6 +37,14 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2">
             <OnlineIndicator />
+            <button
+              onClick={() => setTheme(isDark ? 'light' : 'dark')}
+              className="text-lg leading-none px-2 py-1 rounded-lg transition-colors hover:bg-white/10"
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label="Toggle dark mode"
+            >
+              {isDark ? '☀️' : '🌙'}
+            </button>
             <span className="hidden sm:block text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#2563EB' }}>
               Phase 1
             </span>

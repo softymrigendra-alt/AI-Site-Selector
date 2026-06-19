@@ -1,10 +1,88 @@
-/* Reset Vite defaults so Tailwind CDN classes take full effect */
 *, *::before, *::after { box-sizing: border-box; }
-
 body { margin: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
+#root { width: 100%; text-align: left; min-height: 100svh; }
 
-#root {
-  width: 100%;
-  text-align: left;
-  min-height: 100svh;
+/* ── Light mode tokens ─────────────────────────────────────── */
+:root {
+  --bg-page:       #EFF6FF;
+  --bg-card:       #FFFFFF;
+  --bg-header:     #1A2332;
+  --bg-input:      #FFFFFF;
+  --bg-muted:      #F8FAFC;
+
+  --text-primary:  #1A2332;
+  --text-secondary:#6B7280;
+  --text-muted:    #9CA3AF;
+
+  --border:        #E5E7EB;
+  --border-input:  #D1D5DB;
+
+  --accent:        #2563EB;
+  --accent-light:  #EFF6FF;
+  --success:       #16A34A;
+  --warning:       #D97706;
+  --danger:        #DC2626;
 }
+
+/* ── Dark mode tokens ──────────────────────────────────────── */
+.dark {
+  --bg-page:       #0F172A;
+  --bg-card:       #1E293B;
+  --bg-header:     #0D1B2A;
+  --bg-input:      #1E293B;
+  --bg-muted:      #162032;
+
+  --text-primary:  #F1F5F9;
+  --text-secondary:#94A3B8;
+  --text-muted:    #64748B;
+
+  --border:        #334155;
+  --border-input:  #475569;
+
+  --accent:        #3B82F6;
+  --accent-light:  #1E3A5F;
+  --success:       #22C55E;
+  --warning:       #F59E0B;
+  --danger:        #F87171;
+}
+
+/* ── Global surface overrides ──────────────────────────────── */
+body {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Card / panel surfaces */
+.dark .bg-white { background-color: var(--bg-card) !important; }
+.dark .bg-gray-50,
+.dark .hover\:bg-gray-50:hover { background-color: var(--bg-muted) !important; }
+
+/* Borders */
+.dark .border-gray-200,
+.dark .border-gray-100 { border-color: var(--border) !important; }
+.dark .border-gray-300 { border-color: var(--border-input) !important; }
+
+/* Text */
+.dark .text-gray-500 { color: var(--text-secondary) !important; }
+.dark .text-gray-400 { color: var(--text-muted) !important; }
+.dark .text-gray-600 { color: var(--text-secondary) !important; }
+
+/* Inputs / selects */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-input) !important;
+}
+.dark input::placeholder { color: var(--text-muted) !important; }
+
+/* Accent light bg (insight box, etc.) */
+.dark [style*="#EFF6FF"] {
+  background-color: var(--accent-light) !important;
+}
+
+/* Shadow softening in dark mode */
+.dark .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important; }
+.dark .shadow-md { box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
