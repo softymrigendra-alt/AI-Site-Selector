@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
 import MySitesPage from './pages/MySitesPage';
 import AdminPage from './pages/AdminPage';
+
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 import { OnlineIndicator } from './components/OnlineIndicator';
 import { useDarkMode } from './hooks/useDarkMode';
 
-type TabId = 'v1' | 'v2' | 'sites' | 'admin';
+type TabId = 'v1' | 'v2' | 'sites' | 'reports' | 'admin';
 
 interface Tab {
   id: TabId;
@@ -16,10 +18,11 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { id: 'v1',    label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
-  { id: 'v2',    label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
-  { id: 'sites', label: 'My Sites',   sublabel: 'Saved analyses' },
-  { id: 'admin', label: 'Monitor',    sublabel: 'Agent pipeline health' },
+  { id: 'v1',      label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
+  { id: 'v2',      label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
+  { id: 'sites',   label: 'My Sites',   sublabel: 'Saved analyses' },
+  { id: 'reports', label: 'Reports',    sublabel: 'Portfolio analytics' },
+  { id: 'admin',   label: 'Monitor',    sublabel: 'Agent pipeline health' },
 ];
 
 export default function App() {
@@ -81,6 +84,11 @@ export default function App() {
         {activeTab === 'v2' && <V2Page />}
         {activeTab === 'sites' && (
           <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
+        )}
+        {activeTab === 'reports' && (
+          <Suspense fallback={<div className="text-center py-20 text-gray-400 text-sm">Loading charts…</div>}>
+            <ReportsPage />
+          </Suspense>
         )}
         {activeTab === 'admin' && <AdminPage />}
       </main>
