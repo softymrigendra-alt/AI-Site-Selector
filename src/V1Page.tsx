@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { calculateROI, formatCurrency, formatMonths, CHARGER_CONFIG } from './utils/roiCalculator';
+import { saveSiteAnalysis } from './lib/supabase';
+import { Toast, useToast } from './components/Toast';
 import type { SiteFormInput, SiteResult, RiskLevel, DemandLevel, ROIResult } from './types';
 
 interface AIForecastResponse {
@@ -120,6 +122,8 @@ export default function V1Page() {
   const [form, setForm] = useState<SiteFormInput>(DEFAULT_FORM);
   const [result, setResult] = useState<SiteResult | null>(null);
   const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [saving, setSaving] = useState<boolean>(false);
+  const { toasts, addToast, dismissToast } = useToast();
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -167,10 +171,32 @@ export default function V1Page() {
     }
   }
 
+  async function handleSave() {
+    if (!result) return;
+    setSaving(true);
+    const siteName = form.address.trim() || `${form.propertyType} · ${new Date().toLocaleDateString()}`;
+    const saved = await saveSiteAnalysis({
+      siteName,
+      siteInput: form,
+      roiResult: result.roi,
+      siteScore: result.siteScore,
+      evDemandLevel: result.evDemandLevel,
+      competitorRisk: result.competitorRisk,
+      aiInsight: result.aiInsight,
+    });
+    setSaving(false);
+    if (saved) {
+      addToast('Site analysis saved successfully', 'success');
+    } else {
+      addToast('Could not save — check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in .env.local', 'error');
+    }
+  }
+
   const labelClass = 'block text-sm font-medium mb-1';
   const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400';
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
       {/* Form */}
       <div className="lg:col-span-2">
@@ -340,9 +366,30 @@ export default function V1Page() {
                 <div>Monthly OpEx excludes electricity cost</div>
               </div>
             </details>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => { setResult(null); setForm(DEFAULT_FORM); }}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
+                style={{ borderColor: '#2563EB', color: '#2563EB' }}
+              >
+                Analyse Another Site
+              </button>
+              <button
+                onClick={() => void handleSave()}
+                disabled={saving || aiLoading}
+                className="flex-1 py-2.5 rounded-lg text-white text-sm font-semibold transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: '#16A34A' }}
+              >
+                {saving ? 'Saving…' : '💾 Save Report'}
+              </button>
+            </div>
           </>
         )}
       </div>
     </div>
+    <Toast toasts={toasts} onDismiss={dismissToast} />
+    </>
   );
 }
