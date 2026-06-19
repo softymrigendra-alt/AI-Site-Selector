@@ -10,6 +10,7 @@ import { useDarkMode } from './hooks/useDarkMode';
 import { useAuth } from './hooks/useAuth';
 import { signOut } from './lib/auth';
 import { TabPanel } from './components/AnimatedCard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AnimatePresence } from 'framer-motion';
 
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
@@ -103,6 +104,7 @@ export default function App() {
       </div>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
+        <ErrorBoundary>
         <AnimatePresence mode="wait">
           {activeTab === 'v1' && <TabPanel tabKey="v1"><V1Page /></TabPanel>}
           {activeTab === 'v2' && <TabPanel tabKey="v2"><V2Page /></TabPanel>}
@@ -120,6 +122,7 @@ export default function App() {
           )}
           {activeTab === 'admin' && <TabPanel tabKey="admin"><AdminPage /></TabPanel>}
         </AnimatePresence>
+        </ErrorBoundary>
       </main>
 
       <footer className="text-center text-xs text-gray-400 py-6">

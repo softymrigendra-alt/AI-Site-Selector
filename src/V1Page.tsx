@@ -3,6 +3,7 @@ import { calculateROI, formatCurrency, formatMonths, CHARGER_CONFIG } from './ut
 import { saveSiteAnalysis } from './lib/supabase';
 import { Toast, useToast } from './components/Toast';
 import { ROIChatAssistant } from './components/ROIChatAssistant';
+import { withRetry, friendlyMessage } from './lib/retry';
 import type { SiteFormInput, SiteResult, RiskLevel, DemandLevel, ROIResult } from './types';
 
 interface AIForecastResponse {
@@ -18,15 +19,18 @@ async function fetchAIForecast(
   roiCalculation: ROIResult,
 ): Promise<AIForecastResponse | null> {
   try {
-    const res = await fetch('/api/forecast', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteInput, roiCalculation }),
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) return null;
-    return await res.json() as AIForecastResponse;
-  } catch {
+    return await withRetry(async () => {
+      const res = await fetch('/api/forecast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteInput, roiCalculation }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) throw new Error(`Forecast API ${res.status}`);
+      return await res.json() as AIForecastResponse;
+    }, { attempts: 2, delayMs: 800, shouldRetry: (e) => !(e instanceof DOMException) });
+  } catch (err) {
+    console.warn('[fetchAIForecast]', friendlyMessage(err));
     return null;
   }
 }
@@ -391,7 +395,7 @@ export default function V1Page() {
       </div>
     </div>
     <Toast toasts={toasts} onDismiss={dismissToast} />
-    {siteResult && <ROIChatAssistant siteResult={siteResult} />}
+    {result && <ROIChatAssistant siteResult={result} />}
     </>
   );
 }
