@@ -19,16 +19,17 @@ type TabId = 'v1' | 'v2' | 'sites' | 'reports' | 'admin';
 
 interface Tab {
   id: TabId;
+  icon: string;
   label: string;
   sublabel: string;
 }
 
 const TABS: Tab[] = [
-  { id: 'v1',      label: 'V1 Manual',  sublabel: 'Enter data, instant forecast' },
-  { id: 'v2',      label: 'V2 Agentic', sublabel: 'AI agents fetch everything' },
-  { id: 'sites',   label: 'My Sites',   sublabel: 'Saved analyses' },
-  { id: 'reports', label: 'Reports',    sublabel: 'Portfolio analytics' },
-  { id: 'admin',   label: 'Monitor',    sublabel: 'Agent pipeline health' },
+  { id: 'v1',      icon: '⚡', label: 'Forecast',  sublabel: 'Manual analysis' },
+  { id: 'v2',      icon: '🤖', label: 'AI Agents', sublabel: 'Live pipeline' },
+  { id: 'sites',   icon: '📋', label: 'My Sites',  sublabel: 'Saved' },
+  { id: 'reports', icon: '📊', label: 'Reports',   sublabel: 'Analytics' },
+  { id: 'admin',   icon: '🔍', label: 'Monitor',   sublabel: 'Health' },
 ];
 
 export default function App() {
@@ -38,95 +39,121 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#EFF6FF' }}>
+    <div className="min-h-screen app-bg">
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
-      <header style={{ backgroundColor: '#1A2332' }} className="text-white shadow-lg">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚡</span>
-            <div>
-              <h1 className="text-lg font-bold leading-tight">{branding.companyName}</h1>
-              <p className="text-xs leading-tight" style={{ color: '#93C5FD' }}>{branding.tagline}</p>
+
+      {/* ── Header ────────────────────────────────────────────── */}
+      <header className="header-gradient relative overflow-hidden">
+        {/* Subtle grid overlay */}
+        <div className="absolute inset-0 opacity-5" style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+          backgroundSize: '32px 32px'
+        }} />
+
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between py-4">
+            {/* Logo */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-lg" style={{ background: 'linear-gradient(135deg,#3B82F6,#06B6D4)' }}>
+                ⚡
+              </div>
+              <div>
+                <h1 className="text-base font-bold text-white leading-tight tracking-tight">{branding.companyName}</h1>
+                <p className="text-xs leading-tight" style={{ color: '#93C5FD' }}>{branding.tagline}</p>
+              </div>
+            </div>
+
+            {/* Right controls */}
+            <div className="flex items-center gap-2">
+              <OnlineIndicator />
+              <button
+                onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors hover:bg-white/10"
+                title={isDark ? 'Light mode' : 'Dark mode'}
+              >
+                {isDark ? '☀️' : '🌙'}
+              </button>
+              {user ? (
+                <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                    <div className="w-5 h-5 rounded-full bg-blue-400 flex items-center justify-center text-xs text-white font-bold">
+                      {user.email?.[0]?.toUpperCase() ?? 'U'}
+                    </div>
+                    <span className="text-xs text-blue-100 max-w-[110px] truncate">{user.email}</span>
+                  </div>
+                  <button
+                    onClick={() => signOut()}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors text-blue-200 hover:text-white hover:bg-white/10"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="text-xs px-4 py-2 rounded-lg font-semibold transition-all border text-white hover:bg-white hover:text-blue-700"
+                  style={{ borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.1)' }}
+                >
+                  Sign in
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <OnlineIndicator />
-            <button
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="text-lg leading-none px-2 py-1 rounded-lg transition-colors hover:bg-white/10"
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              aria-label="Toggle dark mode"
-            >
-              {isDark ? '☀️' : '🌙'}
-            </button>
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:block text-xs text-blue-200 truncate max-w-[120px]">{user.email}</span>
-                <button
-                  onClick={() => signOut()}
-                  className="text-xs px-2 py-1 rounded-lg transition-colors hover:bg-white/10 text-blue-200"
-                >
-                  Sign out
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAuth(true)}
-                className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors hover:bg-white/10 border border-white/20 text-white"
-              >
-                Sign in
-              </button>
-            )}
+
+          {/* Hero strip */}
+          <div className="pb-5 pt-1">
+            <p className="text-2xl sm:text-3xl font-bold text-white leading-tight">
+              Find your next <span style={{ color: '#67E8F9' }}>EV charging site</span>
+            </p>
+            <p className="text-sm mt-1" style={{ color: '#93C5FD' }}>
+              AI-powered ROI forecasting · live market data · 5-agent analysis pipeline
+            </p>
           </div>
         </div>
       </header>
 
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4">
-          <nav className="flex gap-1 pt-2">
+      {/* ── Tab bar ───────────────────────────────────────────── */}
+      <div className="tab-bar sticky top-0 z-30 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <nav className="flex gap-1 overflow-x-auto no-scrollbar">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-5 py-3 rounded-t-lg text-sm font-medium transition-colors focus:outline-none ${
-                  activeTab === tab.id
-                    ? 'bg-[#EFF6FF] border border-b-0 border-gray-200'
-                    : 'text-gray-500 hover:bg-gray-50'
+                className={`tab-btn flex-shrink-0 flex items-center gap-1.5 px-4 py-3.5 text-sm font-medium transition-all focus:outline-none border-b-2 ${
+                  activeTab === tab.id ? 'tab-active' : 'tab-inactive'
                 }`}
-                style={activeTab === tab.id ? { color: '#2563EB' } : {}}
               >
+                <span className="text-base leading-none">{tab.icon}</span>
                 <span className="font-semibold">{tab.label}</span>
-                <span className="hidden sm:inline text-xs ml-2 text-gray-400">— {tab.sublabel}</span>
+                <span className="hidden md:block text-xs opacity-60">· {tab.sublabel}</span>
               </button>
             ))}
           </nav>
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      {/* ── Main content ──────────────────────────────────────── */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <ErrorBoundary>
-        <AnimatePresence mode="wait">
-          {activeTab === 'v1' && <TabPanel tabKey="v1"><V1Page /></TabPanel>}
-          {activeTab === 'v2' && <TabPanel tabKey="v2"><V2Page /></TabPanel>}
-          {activeTab === 'sites' && (
-            <TabPanel tabKey="sites">
-              <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
-            </TabPanel>
-          )}
-          {activeTab === 'reports' && (
-            <TabPanel tabKey="reports">
-              <Suspense fallback={<div className="text-center py-20 text-gray-400 text-sm">Loading charts…</div>}>
-                <ReportsPage />
-              </Suspense>
-            </TabPanel>
-          )}
-          {activeTab === 'admin' && <TabPanel tabKey="admin"><AdminPage /></TabPanel>}
-        </AnimatePresence>
+          <AnimatePresence mode="wait">
+            {activeTab === 'v1'      && <TabPanel tabKey="v1"><V1Page /></TabPanel>}
+            {activeTab === 'v2'      && <TabPanel tabKey="v2"><V2Page /></TabPanel>}
+            {activeTab === 'sites'   && <TabPanel tabKey="sites"><MySitesPage onGoAnalyse={() => setActiveTab('v1')} /></TabPanel>}
+            {activeTab === 'reports' && (
+              <TabPanel tabKey="reports">
+                <Suspense fallback={<div className="text-center py-20 text-gray-400 text-sm">Loading charts…</div>}>
+                  <ReportsPage />
+                </Suspense>
+              </TabPanel>
+            )}
+            {activeTab === 'admin' && <TabPanel tabKey="admin"><AdminPage /></TabPanel>}
+          </AnimatePresence>
         </ErrorBoundary>
       </main>
 
-      <footer className="text-center text-xs text-gray-400 py-6">
-        Phase 2 · White-label EV Site Selection · Built with React + Vite + TypeScript
+      <footer className="text-center text-xs py-8" style={{ color: 'var(--text-muted)' }}>
+        EV Site Selector · Built with React + Vite + TypeScript + Groq AI
       </footer>
     </div>
   );
