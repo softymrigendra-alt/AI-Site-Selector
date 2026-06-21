@@ -384,74 +384,76 @@ export default function V1Page() {
             </div>
           ) : (
             <>
-              {/* Score + headline card */}
-              <div className="card p-5 overflow-hidden relative" style={{ background: 'linear-gradient(135deg,#0F172A 0%,#1E3A5F 100%)' }}>
-                <div className="absolute top-0 right-0 w-48 h-48 opacity-5 rounded-full" style={{ background: 'radial-gradient(circle,#60A5FA,transparent)', transform: 'translate(30%,-30%)' }} />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#60A5FA' }}>AI Site Assessment</p>
-                    <p className="text-white font-bold text-lg mt-1 leading-tight max-w-xs">
+              {/* Score + headline */}
+              <div className="card p-5">
+                <div className="flex items-center gap-5">
+                  <ScoreRing score={result.siteScore} loading={aiLoading} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xl font-black" style={{ color: result.siteScore >= 75 ? '#16A34A' : result.siteScore >= 50 ? '#F59E0B' : '#EF4444' }}>
+                      {result.siteScore >= 75 ? 'Strong Potential' : result.siteScore >= 50 ? 'Moderate Potential' : 'Weak Potential'}
+                    </p>
+                    <p className="text-sm font-semibold mt-0.5 truncate" style={{ color: 'var(--text-primary)' }}>
                       {form.address || `${form.propertyType.charAt(0).toUpperCase() + form.propertyType.slice(1)} Site`}
                     </p>
-                    <p className="text-xs mt-1" style={{ color: '#93C5FD' }}>
-                      {form.targetChargers}× {form.chargerType} · {form.parkingSpaces} spaces · {form.dailyFootfall.toLocaleString()} visitors/day
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {form.propertyType.charAt(0).toUpperCase() + form.propertyType.slice(1)} · {form.chargerType}
                     </p>
-                    <div className="flex gap-2 mt-3">
-                      <div className="flex flex-col">
-                        <span className="text-xs" style={{ color: '#93C5FD' }}>EV Demand</span>
-                        <Badge level={result.evDemandLevel} />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs" style={{ color: '#93C5FD' }}>Competitor Risk</span>
-                        <Badge level={result.competitorRisk} />
-                      </div>
-                    </div>
-                  </div>
-                  <ScoreRing score={result.siteScore} loading={aiLoading} />
-                </div>
-              </div>
-
-              {/* ROI % Callout */}
-              <div className="card p-5" style={{ borderLeft: '4px solid #2563EB' }}>
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Annual Return on Investment</p>
-                    <p className="text-5xl font-black mt-1 leading-none" style={{ color: '#2563EB' }}>
-                      {result.roi.totalSetupCost > 0 ? Math.round((result.roi.year1NetProfit / result.roi.totalSetupCost) * 100) : 0}%
-                    </p>
-                    <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>year-1 net profit ÷ total setup cost</p>
-                  </div>
-                  <div className="text-right space-y-1.5 text-xs flex-shrink-0">
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Setup cost</span>
-                      <p className="font-black text-sm" style={{ color: 'var(--text-primary)' }}>{formatCurrency(result.roi.totalSetupCost)}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Monthly OpEx</span>
-                      <p className="font-black text-sm" style={{ color: 'var(--text-primary)' }}>{formatCurrency(result.roi.monthlyGrossRevenue - result.roi.monthlyNetRevenue)}</p>
-                    </div>
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Net / month</span>
-                      <p className="font-black text-sm" style={{ color: result.roi.monthlyNetRevenue >= 0 ? '#16A34A' : '#DC2626' }}>{formatCurrency(result.roi.monthlyNetRevenue)}</p>
+                    <div className="flex gap-2 mt-2">
+                      <Badge level={result.evDemandLevel} />
+                      <Badge level={result.competitorRisk} />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* ROI stat grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {/* Charger banner */}
+              {(() => {
+                const opt = CHARGER_OPTIONS.find(o => o.type === form.chargerType)!;
+                return (
+                  <div className="rounded-xl p-3.5 flex items-center gap-3" style={{ backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8' }}>
+                      <opt.Icon />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold" style={{ color: '#1D4ED8' }}>
+                        {form.targetChargers}× {form.chargerType} · {opt.kw} · {opt.duration}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: '#3B82F6' }}>
+                        {opt.desc} · Best for: {opt.bestFor}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 4 metric cards */}
+              <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Setup Cost',     value: formatCurrency(result.roi.totalSetupCost),    sub: 'one-time capex',        accent: false },
-                  { label: 'Monthly Net',    value: formatCurrency(result.roi.monthlyNetRevenue),  sub: 'after OpEx',            accent: false },
-                  { label: 'Break-Even',     value: formatMonths(result.roi.breakEvenMonths),     sub: 'to payback',            accent: true  },
-                  { label: '3-Year Profit',  value: formatCurrency(result.roi.year3NetProfit),    sub: 'net of setup cost',     accent: false },
-                ].map(({ label, value, sub, accent }) => (
-                  <div key={label} className="card p-4" style={accent ? { background: 'linear-gradient(135deg,#2563EB,#0EA5E9)', color: 'white' } : {}}>
-                    <p className="text-xs font-medium mb-1" style={{ color: accent ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)' }}>{label}</p>
-                    <p className={`font-black text-xl leading-tight ${accent ? 'text-white' : ''}`} style={accent ? {} : { color: 'var(--text-primary)' }}>{value}</p>
-                    <p className="text-xs mt-0.5" style={{ color: accent ? 'rgba(255,255,255,0.65)' : 'var(--text-muted)' }}>{sub}</p>
+                  { label: 'MONTHLY REVENUE',   value: formatCurrency(result.roi.monthlyNetRevenue),  sub: 'net after OpEx',    vc: 'var(--text-primary)' },
+                  { label: 'BREAK-EVEN',        value: formatMonths(result.roi.breakEvenMonths),      sub: 'to payback',        vc: '#D97706' },
+                  { label: 'EV DRIVERS NEARBY', value: Math.round(form.dailyFootfall * 0.35).toLocaleString(), sub: 'estimated in area', vc: 'var(--text-primary)' },
+                  { label: 'UTILISATION RATE',  value: form.dailyFootfall > 2000 ? '90%' : form.dailyFootfall > 1000 ? '75%' : form.dailyFootfall > 500 ? '62%' : '45%', sub: 'avg session rate', vc: 'var(--text-primary)' },
+                ].map(({ label, value, sub, vc }) => (
+                  <div key={label} className="card p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                    <p className="text-2xl font-black leading-tight" style={{ color: vc }}>{value}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* ROI callout */}
+              <div className="card p-4 flex items-center justify-between gap-4" style={{ borderLeft: '4px solid #16A34A' }}>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#16A34A' }}>ROI</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Annual return on total setup investment</p>
+                  <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                    Setup: {formatCurrency(result.roi.totalSetupCost)} · OpEx: {formatCurrency(Math.round(result.roi.monthlyGrossRevenue - result.roi.monthlyNetRevenue))}/mo
+                  </p>
+                </div>
+                <p className="text-4xl font-black flex-shrink-0" style={{ color: '#16A34A' }}>
+                  {result.roi.totalSetupCost > 0 ? Math.round((result.roi.year1NetProfit / result.roi.totalSetupCost) * 100) : 0}%
+                </p>
               </div>
 
               {/* Year-by-year bars */}

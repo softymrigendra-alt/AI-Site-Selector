@@ -46,13 +46,16 @@ function AgentRow({ meta, status, summary, durationMs }: AgentRowProps) {
 
   return (
     <div
-      className="flex items-start gap-3 p-3 rounded-xl border transition-all duration-300"
-      style={{ backgroundColor: s.bg, borderColor: s.border }}
+      className="flex items-start gap-3 p-3 rounded-xl transition-all duration-300"
+      style={{
+        backgroundColor: s.bg,
+        border: `1px solid ${s.border}`,
+        borderLeft: `4px solid ${(status === 'running' || status === 'done') ? c : '#E5E7EB'}`,
+      }}
     >
-      <div className="text-xl mt-0.5 flex-shrink-0">{meta.icon}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold" style={{ color: '#1A2332' }}>{meta.name}</span>
+          <span className="text-sm font-semibold" style={{ color: (status === 'running' || status === 'done') ? c : '#1A2332' }}>{meta.name}</span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {durationMs !== undefined && (
               <span className="text-xs text-gray-400">{(durationMs / 1000).toFixed(1)}s</span>
@@ -167,51 +170,70 @@ export default function V2Page() {
   const roi = output?.roi;
   const market = output?.market;
   const site = output?.site;
+  const completedCount = AGENT_META.filter(m => statuses[m.id] === 'done' || statuses[m.id] === 'failed').length;
 
   return (
     <div className="space-y-5">
-      {/* Header + search */}
-      <div className="rounded-2xl p-5 text-white" style={{ backgroundColor: '#1A2332' }}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold">V2 Agentic Pipeline</h2>
-            <p className="text-sm mt-1" style={{ color: '#93C5FD' }}>
-              5 AI agents fetch live competitor data, electricity rates, EV registrations, and generate a real ROI forecast.
-            </p>
-          </div>
-          <span
-            className="flex-shrink-0 text-xs px-2 py-1 rounded-full"
-            style={{ backgroundColor: phase === 'done' ? '#16A34A' : '#2563EB' }}
-          >
-            {phase === 'done' ? `✓ Live · ${(totalMs / 1000).toFixed(1)}s` : 'Live APIs'}
-          </span>
+
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div className="card p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="font-bold" style={{ color: '#2563EB' }}>⚡</span>
+          <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: '#2563EB' }}>Powered by Agentic AI</p>
         </div>
-        <div className="mt-4 flex gap-3">
+        <h2 className="text-2xl font-black" style={{ color: 'var(--text-primary)' }}>Autonomous Site Analysis</h2>
+        <p className="text-sm mt-1 mb-5" style={{ color: 'var(--text-secondary)' }}>
+          AI agents will automatically fetch EV demand, competitor data, utility rates and generate your forecast — no manual inputs needed.
+        </p>
+        <div className="flex gap-3">
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && phase !== 'running' && void handleRun()}
             placeholder="Enter site address (e.g. 400 N Michigan Ave, Chicago, IL)"
-            className="flex-1 rounded-lg px-4 py-2.5 text-sm text-gray-900 border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="flex-1 rounded-lg px-4 py-2.5 text-sm border focus:outline-none focus:ring-2 focus:ring-blue-400 form-input"
             disabled={phase === 'running'}
           />
           <button
             onClick={() => void handleRun()}
             disabled={phase === 'running' || !address.trim()}
-            className={`px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all disabled:opacity-50${phase === 'idle' ? ' btn-pulse-glow' : ''}`}
-            style={{ backgroundColor: '#2563EB' }}
+            className={`px-6 py-2.5 rounded-xl text-white text-sm font-bold transition-all disabled:opacity-50${phase === 'idle' ? ' btn-pulse-glow' : ''}`}
+            style={{ backgroundColor: '#1A2332' }}
           >
-            {phase === 'running' ? 'Running…' : 'Analyse Site ⚡'}
+            {phase === 'running' ? 'Running…' : 'Run AI Agents ⚡'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Agent pipeline column */}
-        <div className="lg:col-span-2">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Agent Pipeline</h3>
+      {/* ── Idle placeholder ───────────────────────────────────── */}
+      {phase === 'idle' && (
+        <div className="card p-12 flex flex-col items-center justify-center text-center" style={{ minHeight: '280px' }}>
+          <span className="text-5xl mb-4">🤖</span>
+          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Enter an address to start the live pipeline</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Agents call AFDC, EIA, and Nominatim APIs in real time</p>
+        </div>
+      )}
+
+      {/* ── Pipeline card ──────────────────────────────────────── */}
+      {phase !== 'idle' && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Live Agent Pipeline</h3>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Agents working in sequence — no manual inputs needed</p>
+            </div>
+            <span className="text-xs px-3 py-1.5 rounded-full font-semibold flex items-center gap-2 flex-shrink-0"
+              style={{
+                backgroundColor: phase === 'done' ? '#F0FDF4' : '#EFF6FF',
+                color: phase === 'done' ? '#16A34A' : '#2563EB',
+                border: `1px solid ${phase === 'done' ? '#86EFAC' : '#BFDBFE'}`,
+              }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: phase === 'done' ? '#16A34A' : '#2563EB' }} />
+              {completedCount}/5 complete
+            </span>
+          </div>
+
           <div className="relative">
-            {/* Vertical track line */}
             <div className="absolute left-4 top-5 bottom-5 w-0.5" style={{ backgroundColor: 'var(--border)' }} />
             <div className="space-y-2">
               {AGENT_META.map((meta) => {
@@ -220,14 +242,12 @@ export default function V2Page() {
                 const isRunning = status === 'running';
                 return (
                   <div key={meta.id} className="relative flex items-start gap-2.5">
-                    {/* Track node */}
                     <div
                       className="relative z-10 w-8 h-8 mt-2.5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all duration-300"
                       style={{
                         backgroundColor: isDone ? meta.color : isRunning ? meta.color + '18' : 'white',
                         borderColor: (isDone || isRunning) ? meta.color : '#E5E7EB',
-                      }}
-                    >
+                      }}>
                       {isRunning && <div className="w-3 h-3 rounded-full animate-ping" style={{ backgroundColor: meta.color }} />}
                       {isDone && <span className="text-white text-xs font-black">✓</span>}
                       {!isDone && !isRunning && <span className="text-sm">{meta.icon}</span>}
@@ -240,182 +260,187 @@ export default function V2Page() {
               })}
             </div>
           </div>
+
+          {phase === 'done' && (
+            <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              <span>All agents completed</span>
+              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>Total: {(totalMs / 1000).toFixed(1)}s</span>
+            </div>
+          )}
         </div>
+      )}
 
-        {/* Results column */}
-        <div className="lg:col-span-3">
-          {phase === 'idle' && (
-            <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-12 flex flex-col items-center justify-center text-gray-400 text-center h-full">
-              <span className="text-5xl mb-3">🤖</span>
-              <p className="font-medium">Enter an address to start the live pipeline</p>
-              <p className="text-sm mt-1">Agents call AFDC, EIA, and Nominatim APIs in real time</p>
-            </div>
-          )}
+      {/* ── Error ──────────────────────────────────────────────── */}
+      {phase === 'error' && (
+        <div className="card p-8 flex flex-col items-center justify-center text-center">
+          <span className="text-4xl mb-3">⚠️</span>
+          <p className="font-semibold text-red-600">Pipeline failed</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Check your network connection and try again.</p>
+        </div>
+      )}
 
-          {phase === 'running' && !output && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-8 flex flex-col items-center justify-center text-center h-full">
-              <div className="text-4xl mb-3 animate-bounce">⚡</div>
-              <p className="font-semibold" style={{ color: '#2563EB' }}>Agents working…</p>
-              <p className="text-sm text-gray-400 mt-1">Fetching live data from AFDC, EIA, and Nominatim</p>
-            </div>
-          )}
+      {/* ── Results ────────────────────────────────────────────── */}
+      {output && lead && roi && market && (
+        <div className="space-y-4">
 
-          {phase === 'error' && (
-            <div className="bg-white rounded-2xl border border-red-200 p-8 flex flex-col items-center justify-center text-center">
-              <span className="text-4xl mb-3">⚠️</span>
-              <p className="font-semibold text-red-600">Pipeline failed</p>
-              <p className="text-sm text-gray-400 mt-1">Check your network connection and try again.</p>
-            </div>
-          )}
-
-          {output && lead && roi && market && (
-            <div className="space-y-4">
-              {/* Recommendation banner */}
-              <div className="rounded-xl p-4 text-white" style={{ backgroundColor: '#16A34A' }}>
-                <p className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-80">Agent Recommendation</p>
-                <p className="font-bold text-lg">{roi.recommendedCount}× {roi.recommendedType} Chargers</p>
-                <p className="text-sm mt-1 opacity-90">{roi.reasoning}</p>
+          {/* AI Confidence */}
+          <div className="card p-5">
+            <div className="flex items-start justify-between mb-3 gap-4">
+              <div>
+                <p className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>AI Confidence: {lead.confidenceLevel}%</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Based on live data from 4 external sources and comparison against similar sites
+                </p>
               </div>
+              <span className="text-xs px-3 py-1.5 rounded-full font-semibold flex-shrink-0"
+                style={{
+                  backgroundColor: lead.confidenceLevel >= 80 ? '#F0FDF4' : '#FEF9C3',
+                  color: lead.confidenceLevel >= 80 ? '#16A34A' : '#A16207',
+                  border: `1px solid ${lead.confidenceLevel >= 80 ? '#86EFAC' : '#FDE68A'}`,
+                }}>
+                {lead.confidenceLevel >= 80 ? 'High confidence' : 'Moderate confidence'}
+              </span>
+            </div>
+            <div className="h-3 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-muted)' }}>
+              <div className="h-3 rounded-full" style={{ width: `${lead.confidenceLevel}%`, background: 'linear-gradient(90deg,#1A2332,#2563EB)', transition: 'width 1s cubic-bezier(0.22,1,0.36,1)' }} />
+            </div>
+          </div>
 
-              {/* ROI grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {([
-                  { label: 'Setup Cost',    value: formatCurrency(roi.roi.totalSetupCost) },
-                  { label: 'Monthly Net',   value: formatCurrency(roi.roi.monthlyNetRevenue) },
-                  { label: 'Break-Even',    value: formatMonths(roi.roi.breakEvenMonths) },
-                  { label: '3-Year Profit', value: formatCurrency(roi.roi.year3NetProfit) },
-                ] as const).map(({ label, value }) => (
-                  <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 text-center">
-                    <p className="text-xs text-gray-500 mb-1">{label}</p>
-                    <p className="text-base font-bold" style={{ color: '#1A2332' }}>{value}</p>
+          {/* Metric cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {([
+              { label: 'SITE SCORE',    value: `${lead.siteScore}/100`,                        vc: '#2563EB' },
+              { label: 'MONTHLY NET',   value: formatCurrency(roi.roi.monthlyNetRevenue),      vc: '#16A34A' },
+              { label: 'BREAK-EVEN',    value: formatMonths(roi.roi.breakEvenMonths),          vc: '#D97706' },
+              { label: 'YEAR 3 PROFIT', value: formatCurrency(roi.roi.year3NetProfit),         vc: 'var(--text-primary)' },
+            ]).map(({ label, value, vc }) => (
+              <div key={label} className="card p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                <p className="text-xl font-black" style={{ color: vc }}>{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* What AI found + What AI recommends */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="card p-5">
+              <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>What AI found automatically</h4>
+              <div className="space-y-2">
+                {[
+                  site?.geo ? `${site.geo.city}, ${site.geo.state} — location geocoded` : null,
+                  `${site?.nearbyCount ?? 0} competitor stations within 5 mi (AFDC live)`,
+                  site?.evRegistrations?.evCount ? `${site.evRegistrations.evCount.toLocaleString()} EV registrations in state` : null,
+                  `Live electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh${output.utility.rate?.source ? ` (${output.utility.rate.source})` : ' (estimate)'}`,
+                  `${roi.recommendedCount}× ${roi.recommendedType} optimal — ${Math.round((roi.roi.year1NetProfit / roi.roi.totalSetupCost) * 100)}% annual ROI`,
+                ].filter(Boolean).map((fact) => (
+                  <div key={fact as string} className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="font-bold flex-shrink-0 mt-0.5" style={{ color: '#16A34A' }}>·</span>
+                    <span>{fact}</span>
                   </div>
                 ))}
               </div>
+            </div>
 
-              {/* Scores + AI insight */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <h4 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>AI Assessment</h4>
-                <div className="grid grid-cols-3 gap-4 mb-3">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold" style={{ color: '#2563EB' }}>{lead.siteScore}</p>
-                    <p className="text-xs text-gray-500">Site Score</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold" style={{ color: '#16A34A' }}>{lead.confidenceLevel}%</p>
-                    <p className="text-xs text-gray-500">Confidence</p>
-                  </div>
-                  <div className="text-center">
-                    <p
-                      className="text-base font-bold capitalize"
-                      style={{ color: lead.qualification === 'strong' ? '#16A34A' : lead.qualification === 'moderate' ? '#D97706' : '#DC2626' }}
-                    >
-                      {lead.qualification}
-                    </p>
-                    <p className="text-xs text-gray-500">Qualification</p>
-                  </div>
-                </div>
-                <div className="rounded-lg p-3 text-sm leading-relaxed" style={{ backgroundColor: '#EFF6FF', color: '#1A2332' }}>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#2563EB' }}>LLM Insight</p>
-                  {lead.aiInsight}
-                </div>
-              </div>
-
-              {/* Live data sources */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <h4 className="text-sm font-semibold mb-3" style={{ color: '#1A2332' }}>Live Data Sources</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  {site?.geo && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-500 font-bold">✓</span>
-                      <span className="text-gray-600">
-                        <span className="font-medium">Location:</span> {site.geo.city}, {site.geo.state}
-                      </span>
+            <div className="card p-5">
+              <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>What AI recommends doing next</h4>
+              <div className="space-y-2.5">
+                {[
+                  { title: 'Send ROI proposal',   badge: 'Draft ready', desc: `${roi.recommendedCount}× ${roi.recommendedType} · ${formatMonths(roi.roi.breakEvenMonths)} payback` },
+                  { title: 'Apply for grant',      badge: 'Available',   desc: `${market.grantValue} — ${market.availableGrants[0] ?? 'federal incentive'}` },
+                  { title: 'Schedule site visit',  badge: 'Next step',   desc: 'Confirm parking layout and grid connection capacity' },
+                ].map(({ title, badge, desc }) => (
+                  <div key={title} className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg-muted)', border: '1px solid var(--border)' }}>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{title}</p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' }}>{badge}</span>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-500 font-bold">✓</span>
-                    <span className="text-gray-600">
-                      <span className="font-medium">Competitors:</span> {site?.nearbyCount ?? 0} within 5 miles (AFDC)
-                    </span>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{desc}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-500 font-bold">✓</span>
-                    <span className="text-gray-600">
-                      <span className="font-medium">EV registrations:</span> {(site?.evRegistrations?.evCount ?? 0).toLocaleString()} (DOE)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={output.utility.rate ? 'text-green-500 font-bold' : 'text-amber-500 font-bold'}>
-                      {output.utility.rate ? '✓' : '~'}
-                    </span>
-                    <span className="text-gray-600">
-                      <span className="font-medium">Electricity:</span> ${output.utility.ratePerKwh.toFixed(3)}/kWh
-                      {output.utility.rate?.source ? ` (${output.utility.rate.source})` : ' (estimate)'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Map — lazy loaded to keep initial bundle small */}
-              <Suspense fallback={<div className="rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 text-sm" style={{ height: 280 }}>Loading map…</div>}>
-                {site?.geo ? (
-                  <SiteMap
-                    lat={site.geo.lat}
-                    lng={site.geo.lng}
-                    siteAddress={site.geo.formattedAddress}
-                    competitors={site.competitors}
-                  />
-                ) : (
-                  <SiteMapPlaceholder reason="Address could not be geocoded — check spelling and try again." />
-                )}
-              </Suspense>
-
-              {/* Grants */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <h4 className="text-sm font-semibold mb-2" style={{ color: '#1A2332' }}>
-                  Available Grants <span className="text-xs font-normal text-gray-400">(Market Watch agent)</span>
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {market.availableGrants.map((g) => (
-                    <span key={g} className="text-xs px-2 py-1 rounded-full border"
-                      style={{ backgroundColor: '#F0FDF4', color: '#16A34A', borderColor: '#86EFAC' }}>
-                      {g}
-                    </span>
-                  ))}
-                  <span className="text-xs px-2 py-1 rounded-full border font-semibold"
-                    style={{ backgroundColor: '#EFF6FF', color: '#2563EB', borderColor: '#BFDBFE' }}>
-                    {market.grantValue}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">Peak demand: {market.peakDemand}</p>
-              </div>
-
-              {/* V1 vs V2 comparison strip */}
-              <div className="rounded-xl p-4" style={{ backgroundColor: '#1A2332' }}>
-                <p className="text-xs font-bold uppercase tracking-widest mb-2.5" style={{ color: '#60A5FA' }}>
-                  What V2 found that V1 couldn't
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    `Live electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh`,
-                    `${site?.nearbyCount ?? 0} real competitor stations (AFDC)`,
-                    `Optimal mix: ${roi.recommendedCount}× ${roi.recommendedType}`,
-                    `${(site?.evRegistrations?.evCount ?? 0).toLocaleString()} EVs registered nearby`,
-                  ].map((fact) => (
-                    <span
-                      key={fact}
-                      className="text-xs px-2.5 py-1 rounded-full font-medium"
-                      style={{ backgroundColor: 'rgba(37,99,235,0.15)', color: '#93C5FD', border: '1px solid rgba(37,99,235,0.3)' }}
-                    >
-                      ✓ {fact}
-                    </span>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* LLM Insight */}
+          <div className="card p-4" style={{ border: '1px solid #BFDBFE', background: 'linear-gradient(135deg,var(--accent-light) 0%,var(--bg-card) 100%)' }}>
+            <p className="text-xs font-bold mb-2 capitalize" style={{ color: '#2563EB' }}>
+              LLM Insight · {lead.qualification.toUpperCase()} · confidence {lead.confidenceLevel}%
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{lead.aiInsight}</p>
+          </div>
+
+          {/* Live data sources */}
+          <div className="card p-4">
+            <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Live Data Sources</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {site?.geo && (
+                <div className="flex items-center gap-2">
+                  <span className="text-green-500 font-bold">✓</span>
+                  <span style={{ color: 'var(--text-secondary)' }}><span className="font-medium">Location:</span> {site.geo.city}, {site.geo.state}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-green-500 font-bold">✓</span>
+                <span style={{ color: 'var(--text-secondary)' }}><span className="font-medium">Competitors:</span> {site?.nearbyCount ?? 0} within 5 miles (AFDC)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-green-500 font-bold">✓</span>
+                <span style={{ color: 'var(--text-secondary)' }}><span className="font-medium">EV registrations:</span> {(site?.evRegistrations?.evCount ?? 0).toLocaleString()} (DOE)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={output.utility.rate ? 'text-green-500 font-bold' : 'text-amber-500 font-bold'}>{output.utility.rate ? '✓' : '~'}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  <span className="font-medium">Electricity:</span> ${output.utility.ratePerKwh.toFixed(3)}/kWh
+                  {output.utility.rate?.source ? ` (${output.utility.rate.source})` : ' (estimate)'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Map */}
+          <Suspense fallback={<div className="rounded-xl border flex items-center justify-center text-sm" style={{ height: 280, borderColor: 'var(--border)', color: 'var(--text-muted)' }}>Loading map…</div>}>
+            {site?.geo ? (
+              <SiteMap lat={site.geo.lat} lng={site.geo.lng} siteAddress={site.geo.formattedAddress} competitors={site.competitors} />
+            ) : (
+              <SiteMapPlaceholder reason="Address could not be geocoded — check spelling and try again." />
+            )}
+          </Suspense>
+
+          {/* Grants */}
+          <div className="card p-4">
+            <h4 className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+              Available Grants <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>(Market Watch agent)</span>
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {market.availableGrants.map((g) => (
+                <span key={g} className="text-xs px-2 py-1 rounded-full border" style={{ backgroundColor: '#F0FDF4', color: '#16A34A', borderColor: '#86EFAC' }}>{g}</span>
+              ))}
+              <span className="text-xs px-2 py-1 rounded-full border font-semibold" style={{ backgroundColor: '#EFF6FF', color: '#2563EB', borderColor: '#BFDBFE' }}>
+                {market.grantValue}
+              </span>
+            </div>
+            <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Peak demand: {market.peakDemand}</p>
+          </div>
+
+          {/* V1 vs V2 strip */}
+          <div className="rounded-xl p-4" style={{ backgroundColor: '#1A2332' }}>
+            <p className="text-xs font-bold uppercase tracking-widest mb-2.5" style={{ color: '#60A5FA' }}>What V2 found that V1 couldn't</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                `Live electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh`,
+                `${site?.nearbyCount ?? 0} real competitor stations (AFDC)`,
+                `Optimal mix: ${roi.recommendedCount}× ${roi.recommendedType}`,
+                `${(site?.evRegistrations?.evCount ?? 0).toLocaleString()} EVs registered nearby`,
+              ].map((fact) => (
+                <span key={fact} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: 'rgba(37,99,235,0.15)', color: '#93C5FD', border: '1px solid rgba(37,99,235,0.3)' }}>
+                  ✓ {fact}
+                </span>
+              ))}
+            </div>
+          </div>
+
         </div>
-      </div>
+      )}
     </div>
   );
 }
