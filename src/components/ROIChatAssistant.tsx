@@ -19,14 +19,14 @@ const SUGGESTED = [
 
 function buildContext(site: SiteResult): string {
   return [
-    `Address: ${site.address}`,
-    `Property type: ${site.propertyType}`,
-    `Charger type: ${site.chargerType} × ${site.targetChargers}`,
+    site.address ? `Address: ${site.address}` : '',
+    site.propertyType ? `Property type: ${site.propertyType}` : '',
+    site.chargerType ? `Charger type: ${site.chargerType} × ${site.targetChargers}` : '',
     `Site score: ${site.siteScore}/100`,
-    `Monthly net revenue: $${site.roiCalculation.monthlyNet.toLocaleString()}`,
-    `Break-even: ${Math.round(site.roiCalculation.breakEvenMonths)} months`,
-    `Year-1 profit: $${site.roiCalculation.year1Profit.toLocaleString()}`,
-    `Year-3 revenue: $${site.roiCalculation.year3Revenue.toLocaleString()}`,
+    `Monthly net revenue: $${site.roi.monthlyNetRevenue.toLocaleString()}`,
+    `Break-even: ${Math.round(site.roi.breakEvenMonths)} months`,
+    `Year-1 profit: $${site.roi.year1NetProfit.toLocaleString()}`,
+    `Year-3 profit: $${site.roi.year3NetProfit.toLocaleString()}`,
     `EV demand level: ${site.evDemandLevel}`,
     `Competitor risk: ${site.competitorRisk}`,
     site.aiInsight ? `AI insight: ${site.aiInsight}` : '',
@@ -40,7 +40,7 @@ export function ROIChatAssistant({ siteResult }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: `Hi! I'm your site analysis assistant for **${siteResult.address.split(',')[0]}**. Ask me anything about the ROI, break-even, grants, or charger recommendations.`,
+      content: `Hi! I'm your site analysis assistant for **${(siteResult.address ?? 'this site').split(',')[0]}**. Ask me anything about the ROI, break-even, grants, or charger recommendations.`,
     },
   ]);
   const [input, setInput] = useState('');
@@ -111,7 +111,7 @@ export function ROIChatAssistant({ siteResult }: Props) {
           <div>
             <p className="text-sm font-semibold text-white leading-tight">Site AI Assistant</p>
             <p className="text-xs leading-tight" style={{ color: '#93C5FD' }}>
-              {siteResult.address.split(',')[0].slice(0, 28)}
+              {(siteResult.address ?? 'this site').split(',')[0].slice(0, 28)}
             </p>
           </div>
         </div>

@@ -45,6 +45,10 @@ export interface SiteResult {
   competitorRisk: RiskLevel;
   evDemandLevel: DemandLevel;
   aiInsight: string;
+  address?: string;
+  chargerType?: ChargerType;
+  targetChargers?: number;
+  propertyType?: PropertyType;
 }
 
 /** Shape returned by the Lead Qualification agent (V2 mock) */

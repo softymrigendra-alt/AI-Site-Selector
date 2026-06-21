@@ -146,7 +146,7 @@ export default function V1Page() {
     const score = computeSiteScore(form, roi);
     const risk: RiskLevel = form.dailyFootfall < 200 ? 'high' : form.dailyFootfall > 800 ? 'low' : 'medium';
     const demand: DemandLevel = form.dailyFootfall > 800 ? 'high' : form.dailyFootfall > 300 ? 'medium' : 'low';
-    setResult({ roi, siteScore: score, competitorRisk: risk, evDemandLevel: demand, aiInsight: buildInsight(form, roi, score) });
+    setResult({ roi, siteScore: score, competitorRisk: risk, evDemandLevel: demand, aiInsight: buildInsight(form, roi, score), address: form.address, chargerType: form.chargerType, targetChargers: form.targetChargers, propertyType: form.propertyType });
     setAiLoading(true);
     const ai = await fetchAIForecast(form, roi);
     setAiLoading(false);
