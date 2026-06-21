@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { calculateROI, formatCurrency, formatMonths, CHARGER_CONFIG } from './utils/roiCalculator';
 import { saveSiteAnalysis } from './lib/supabase';
 import { Toast, useToast } from './components/Toast';
@@ -42,10 +42,46 @@ const PROPERTY_TYPES: { value: SiteFormInput['propertyType']; icon: string }[] =
   { value: 'residential', icon: '🏘️' },
 ];
 
-const CHARGER_OPTIONS: { type: SiteFormInput['chargerType']; badge: string; desc: string; color: string }[] = [
-  { type: 'Level 2 AC', badge: 'L2',  desc: '$8/session · 3/day',  color: '#16A34A' },
-  { type: 'DC Fast',    badge: 'DC',  desc: '$18/session · 8/day', color: '#2563EB' },
-  { type: 'Ultra-Fast', badge: 'UF',  desc: '$28/session · 12/day',color: '#7C3AED' },
+function IconPlug() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="2" x2="6" y2="8" /><line x1="18" y1="2" x2="18" y2="8" />
+      <path d="M4 8h16v4a8 8 0 01-16 0V8z" />
+      <line x1="12" y1="16" x2="12" y2="22" />
+    </svg>
+  );
+}
+function IconBolt() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+    </svg>
+  );
+}
+function IconDoubleBolt() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11 2L3 12h7l-1 7 9-11H11l1-6z" />
+      <path d="M18 6l-5 6h5l-4 6 7-8h-5l4-4z" opacity="0.55" />
+    </svg>
+  );
+}
+
+interface ChargerOption {
+  type: SiteFormInput['chargerType'];
+  badge: string;
+  kw: string;
+  duration: string;
+  desc: string;
+  bestFor: string;
+  color: string;
+  Icon: () => React.JSX.Element;
+}
+
+const CHARGER_OPTIONS: ChargerOption[] = [
+  { type: 'Level 2 AC', badge: 'L2', kw: '7–22 kW',    duration: '4–8 hrs',    desc: '$8/session · 3/day',   bestFor: 'Hotels, offices, retail',  color: '#16A34A', Icon: IconPlug },
+  { type: 'DC Fast',    badge: 'DC', kw: '50–150 kW',   duration: '20–60 min',  desc: '$18/session · 8/day',  bestFor: 'Parking, highway stops',   color: '#2563EB', Icon: IconBolt },
+  { type: 'Ultra-Fast', badge: 'UF', kw: '150–350 kW',  duration: '10–20 min',  desc: '$28/session · 12/day', bestFor: 'Malls, transit hubs',      color: '#7C3AED', Icon: IconDoubleBolt },
 ];
 
 const DEFAULT_FORM: SiteFormInput = {
@@ -57,6 +93,52 @@ const DEFAULT_FORM: SiteFormInput = {
   chargerType: 'DC Fast',
 };
 
+function ScoreBars({ result, aiLoading }: { result: SiteResult; aiLoading: boolean }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 80);
+    return () => clearTimeout(t);
+  }, [result.siteScore]);
+
+  const demandPct = result.evDemandLevel === 'high' ? 84 : result.evDemandLevel === 'medium' ? 54 : 24;
+  const gapPct    = result.competitorRisk === 'low'  ? 80 : result.competitorRisk === 'medium' ? 50 : 20;
+  const confPct   = Math.min(94, result.siteScore + 4);
+
+  const bars = [
+    { label: 'EV Demand',      pct: demandPct, color: '#16A34A', badge: result.evDemandLevel },
+    { label: 'Competitor Gap', pct: gapPct,    color: '#2563EB', badge: result.competitorRisk === 'low' ? 'low risk' : result.competitorRisk === 'medium' ? 'moderate' : 'high risk' },
+    { label: 'Confidence',     pct: confPct,   color: '#7C3AED', badge: `${confPct}%` },
+  ];
+
+  return (
+    <div className="card p-5">
+      <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-primary)' }}>Site Intelligence Scores</h3>
+      {aiLoading ? (
+        <p className="text-xs animate-pulse" style={{ color: 'var(--text-muted)' }}>AI scoring in progress…</p>
+      ) : (
+        <div className="space-y-3.5">
+          {bars.map(({ label, pct, color, badge }) => (
+            <div key={label}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full capitalize" style={{ backgroundColor: color + '18', color }}>
+                  {badge}
+                </span>
+              </div>
+              <div className="h-3 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-muted)' }}>
+                <div
+                  className="h-3 rounded-full"
+                  style={{ width: ready ? `${pct}%` : '0%', backgroundColor: color, transition: 'width 0.9s cubic-bezier(0.22, 1, 0.36, 1)' }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScoreRing({ score, loading }: { score: number; loading: boolean }) {
   const r = 42;
   const circ = 2 * Math.PI * r;
@@ -65,7 +147,7 @@ function ScoreRing({ score, loading }: { score: number; loading: boolean }) {
   const label = score >= 75 ? 'Strong' : score >= 50 ? 'Moderate' : 'Weak';
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center score-pop">
       <div className="relative w-28 h-28">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r={r} fill="none" stroke="#E5E7EB" strokeWidth="10" />
@@ -219,22 +301,34 @@ export default function V1Page() {
             <div>
               <label className="block text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>🔌 Charger Type</label>
               <div className="grid grid-cols-3 gap-2">
-                {CHARGER_OPTIONS.map(({ type, badge, desc, color }) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => { setForm(p => ({ ...p, chargerType: type })); setResult(null); }}
-                    className="flex flex-col items-center gap-1 py-3 px-2 rounded-xl border text-center transition-all"
-                    style={form.chargerType === type
-                      ? { backgroundColor: color + '15', borderColor: color, color }
-                      : { borderColor: 'var(--border)', color: 'var(--text-secondary)' }
-                    }
-                  >
-                    <span className="text-xs font-black tracking-wider" style={{ color: form.chargerType === type ? color : 'var(--text-muted)' }}>{badge}</span>
-                    <span className="text-xs font-semibold leading-tight">{type}</span>
-                    <span className="text-xs opacity-60 leading-tight">{desc}</span>
-                  </button>
-                ))}
+                {CHARGER_OPTIONS.map(({ type, badge, kw, duration, desc, bestFor, color, Icon }) => {
+                  const active = form.chargerType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => { setForm(p => ({ ...p, chargerType: type })); setResult(null); }}
+                      className="flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all"
+                      style={active
+                        ? { backgroundColor: color + '12', borderColor: color, borderWidth: '2px' }
+                        : { borderColor: 'var(--border)', borderWidth: '1px', backgroundColor: 'transparent' }
+                      }
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: active ? color + '22' : 'var(--bg-muted)', color: active ? color : 'var(--text-muted)' }}>
+                          <Icon />
+                        </div>
+                        <span className="text-xs font-black tracking-widest" style={{ color: active ? color : 'var(--text-muted)' }}>{badge}</span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold leading-tight" style={{ color: active ? color : 'var(--text-primary)' }}>{type}</p>
+                        <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-muted)' }}>{kw} · {duration}</p>
+                        <p className="text-[10px] font-semibold leading-tight mt-0.5" style={{ color: active ? color : 'var(--text-secondary)' }}>{desc}</p>
+                        <p className="text-[10px] leading-tight mt-0.5 italic" style={{ color: 'var(--text-muted)' }}>Best: {bestFor}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -260,7 +354,7 @@ export default function V1Page() {
             {/* Submit */}
             <button
               type="submit"
-              className="w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:opacity-90 active:scale-[0.98] shadow-md"
+              className="w-full py-4 rounded-xl text-white font-bold text-base transition-all hover:opacity-90 active:scale-[0.98] shadow-md"
               style={{ background: 'linear-gradient(135deg,#2563EB,#0EA5E9)' }}
             >
               Generate AI Forecast ⚡
@@ -317,6 +411,33 @@ export default function V1Page() {
                 </div>
               </div>
 
+              {/* ROI % Callout */}
+              <div className="card p-5" style={{ borderLeft: '4px solid #2563EB' }}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Annual Return on Investment</p>
+                    <p className="text-5xl font-black mt-1 leading-none" style={{ color: '#2563EB' }}>
+                      {result.roi.totalSetupCost > 0 ? Math.round((result.roi.year1NetProfit / result.roi.totalSetupCost) * 100) : 0}%
+                    </p>
+                    <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>year-1 net profit ÷ total setup cost</p>
+                  </div>
+                  <div className="text-right space-y-1.5 text-xs flex-shrink-0">
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Setup cost</span>
+                      <p className="font-black text-sm" style={{ color: 'var(--text-primary)' }}>{formatCurrency(result.roi.totalSetupCost)}</p>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Monthly OpEx</span>
+                      <p className="font-black text-sm" style={{ color: 'var(--text-primary)' }}>{formatCurrency(result.roi.monthlyGrossRevenue - result.roi.monthlyNetRevenue)}</p>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Net / month</span>
+                      <p className="font-black text-sm" style={{ color: result.roi.monthlyNetRevenue >= 0 ? '#16A34A' : '#DC2626' }}>{formatCurrency(result.roi.monthlyNetRevenue)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* ROI stat grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
@@ -362,6 +483,9 @@ export default function V1Page() {
                   })}
                 </div>
               </div>
+
+              {/* Score bars */}
+              <ScoreBars result={result} aiLoading={aiLoading} />
 
               {/* AI Insight */}
               <div className="card p-5" style={{ border: '1px solid #BFDBFE', background: 'linear-gradient(135deg,var(--accent-light) 0%,var(--bg-card) 100%)' }}>

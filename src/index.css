@@ -96,6 +96,20 @@ body {
 .dark [style*="#EFF6FF"] { background-color: var(--accent-light) !important; }
 .dark .hover\:bg-blue-50:hover { background-color: var(--accent-light) !important; }
 
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+  50%       { box-shadow: 0 0 0 12px rgba(37, 99, 235, 0); }
+}
+.btn-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+@keyframes score-pop {
+  0%   { transform: scale(0.7); opacity: 0; }
+  70%  { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.score-pop { animation: score-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
 /* ── Utilities ───────────────────────────────────────────────── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

@@ -14,14 +14,15 @@ interface AgentMeta {
   name: string;
   icon: string;
   description: string;
+  color: string;
 }
 
 const AGENT_META: AgentMeta[] = [
-  { id: 'site',    name: 'Site Intelligence',   icon: '🗺️', description: 'Geocoding address · fetching AFDC competitor stations · EV registrations' },
-  { id: 'utility', name: 'Utility Rate',        icon: '⚡', description: 'Querying EIA for state commercial electricity $/kWh' },
-  { id: 'roi',     name: 'ROI Optimisation',    icon: '📈', description: 'Selecting optimal charger type & count · running ROI model' },
-  { id: 'market',  name: 'Market Watch',        icon: '🔭', description: 'EV adoption trends · available grant programmes' },
-  { id: 'lead',    name: 'Lead Qualification',  icon: '🤖', description: 'LLM scoring site against benchmarks · generating insight' },
+  { id: 'site',    name: 'Site Intelligence',  icon: '🗺️', description: 'Geocoding address · fetching AFDC competitor stations · EV registrations', color: '#2563EB' },
+  { id: 'utility', name: 'Utility Rate',       icon: '⚡', description: 'Querying EIA for state commercial electricity $/kWh',                       color: '#0D9488' },
+  { id: 'roi',     name: 'ROI Optimisation',   icon: '📈', description: 'Selecting optimal charger type & count · running ROI model',                 color: '#7C3AED' },
+  { id: 'market',  name: 'Market Watch',       icon: '🔭', description: 'EV adoption trends · available grant programmes',                             color: '#D97706' },
+  { id: 'lead',    name: 'Lead Qualification', icon: '🤖', description: 'LLM scoring site against benchmarks · generating insight',                    color: '#16A34A' },
 ];
 
 // ─── Agent Row ────────────────────────────────────────────────────────────────
@@ -34,11 +35,12 @@ interface AgentRowProps {
 }
 
 function AgentRow({ meta, status, summary, durationMs }: AgentRowProps) {
+  const c = meta.color;
   const styles: Record<AgentStatus, { bg: string; border: string; dot: string; label: string }> = {
-    waiting: { bg: 'white',   border: '#E5E7EB', dot: '#9CA3AF', label: 'waiting' },
-    running: { bg: '#EFF6FF', border: '#BFDBFE', dot: '#2563EB', label: 'running' },
-    done:    { bg: '#F0FDF4', border: '#86EFAC', dot: '#16A34A', label: 'done' },
-    failed:  { bg: '#FEF2F2', border: '#FCA5A5', dot: '#DC2626', label: 'failed' },
+    waiting: { bg: 'white',       border: '#E5E7EB',  dot: '#9CA3AF', label: 'waiting' },
+    running: { bg: c + '0D',      border: c,          dot: c,         label: 'running' },
+    done:    { bg: c + '08',      border: c + '70',   dot: c,         label: 'done'    },
+    failed:  { bg: '#FEF2F2',     border: '#FCA5A5',  dot: '#DC2626', label: 'failed'  },
   };
   const s = styles[status];
 
@@ -65,7 +67,7 @@ function AgentRow({ meta, status, summary, durationMs }: AgentRowProps) {
         <p className="text-xs text-gray-400 mt-0.5">{meta.description}</p>
         {status === 'running' && (
           <div className="mt-2 h-1 rounded-full bg-gray-200 overflow-hidden">
-            <div className="h-1 rounded-full animate-pulse" style={{ width: '60%', backgroundColor: '#2563EB' }} />
+            <div className="h-1 rounded-full animate-pulse" style={{ width: '60%', backgroundColor: c }} />
           </div>
         )}
         {(status === 'done' || status === 'failed') && summary && (
@@ -196,7 +198,7 @@ export default function V2Page() {
           <button
             onClick={() => void handleRun()}
             disabled={phase === 'running' || !address.trim()}
-            className="px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-opacity disabled:opacity-50"
+            className={`px-5 py-2.5 rounded-lg text-white text-sm font-semibold transition-all disabled:opacity-50${phase === 'idle' ? ' btn-pulse-glow' : ''}`}
             style={{ backgroundColor: '#2563EB' }}
           >
             {phase === 'running' ? 'Running…' : 'Analyse Site ⚡'}
@@ -206,17 +208,38 @@ export default function V2Page() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Agent pipeline column */}
-        <div className="lg:col-span-2 space-y-2">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Agent Pipeline</h3>
-          {AGENT_META.map((meta) => (
-            <AgentRow
-              key={meta.id}
-              meta={meta}
-              status={statuses[meta.id] ?? 'waiting'}
-              summary={summaries[meta.id] ?? ''}
-              durationMs={durations[meta.id]}
-            />
-          ))}
+        <div className="lg:col-span-2">
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Agent Pipeline</h3>
+          <div className="relative">
+            {/* Vertical track line */}
+            <div className="absolute left-4 top-5 bottom-5 w-0.5" style={{ backgroundColor: 'var(--border)' }} />
+            <div className="space-y-2">
+              {AGENT_META.map((meta) => {
+                const status = statuses[meta.id] ?? 'waiting';
+                const isDone = status === 'done';
+                const isRunning = status === 'running';
+                return (
+                  <div key={meta.id} className="relative flex items-start gap-2.5">
+                    {/* Track node */}
+                    <div
+                      className="relative z-10 w-8 h-8 mt-2.5 rounded-full flex-shrink-0 flex items-center justify-center border-2 transition-all duration-300"
+                      style={{
+                        backgroundColor: isDone ? meta.color : isRunning ? meta.color + '18' : 'white',
+                        borderColor: (isDone || isRunning) ? meta.color : '#E5E7EB',
+                      }}
+                    >
+                      {isRunning && <div className="w-3 h-3 rounded-full animate-ping" style={{ backgroundColor: meta.color }} />}
+                      {isDone && <span className="text-white text-xs font-black">✓</span>}
+                      {!isDone && !isRunning && <span className="text-sm">{meta.icon}</span>}
+                    </div>
+                    <div className="flex-1">
+                      <AgentRow meta={meta} status={status} summary={summaries[meta.id] ?? ''} durationMs={durations[meta.id]} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Results column */}
@@ -365,6 +388,29 @@ export default function V2Page() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">Peak demand: {market.peakDemand}</p>
+              </div>
+
+              {/* V1 vs V2 comparison strip */}
+              <div className="rounded-xl p-4" style={{ backgroundColor: '#1A2332' }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-2.5" style={{ color: '#60A5FA' }}>
+                  What V2 found that V1 couldn't
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    `Live electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh`,
+                    `${site?.nearbyCount ?? 0} real competitor stations (AFDC)`,
+                    `Optimal mix: ${roi.recommendedCount}× ${roi.recommendedType}`,
+                    `${(site?.evRegistrations?.evCount ?? 0).toLocaleString()} EVs registered nearby`,
+                  ].map((fact) => (
+                    <span
+                      key={fact}
+                      className="text-xs px-2.5 py-1 rounded-full font-medium"
+                      style={{ backgroundColor: 'rgba(37,99,235,0.15)', color: '#93C5FD', border: '1px solid rgba(37,99,235,0.3)' }}
+                    >
+                      ✓ {fact}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           )}
