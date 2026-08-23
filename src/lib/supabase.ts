@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SiteFormInput, ROIResult, RiskLevel, DemandLevel } from '../types';
 
-const supabaseUrl = import.meta.env['VITE_SUPABASE_URL'] as string | undefined;
-const supabaseAnonKey = import.meta.env['VITE_SUPABASE_ANON_KEY'] as string | undefined;
+// Dot notation is required: Vite statically replaces `import.meta.env.VITE_X`
+// with just that value. Bracket/computed access instead inlines the ENTIRE env
+// object into the bundle, leaking every other VITE_ var (e.g. provider keys).
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 // Client is null when env vars are missing — all functions return graceful no-ops
 export const supabase =
