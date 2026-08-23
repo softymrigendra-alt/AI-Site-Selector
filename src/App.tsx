@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
@@ -10,9 +10,10 @@ import { signOut, onPasswordRecovery } from './lib/auth';
 import { TabPanel } from './components/AnimatedCard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AnimatePresence } from 'framer-motion';
+import { lazyWithReload } from './lib/lazyWithReload';
 
-const ReportsPage = lazy(() => import('./pages/ReportsPage'));
-const AdminPage   = lazy(() => import('./pages/AdminPage'));
+const ReportsPage = lazyWithReload(() => import('./pages/ReportsPage'));
+const AdminPage   = lazyWithReload(() => import('./pages/AdminPage'));
 
 type TabId = 'v1' | 'v2' | 'sites' | 'reports' | 'admin';
 

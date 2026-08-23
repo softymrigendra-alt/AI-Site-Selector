@@ -1,12 +1,13 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import { runAgentPipeline } from './lib/agentOrchestrator';
 import { OCM_LIVE, EIA_KEY_LIVE } from './lib/externalAPIs';
 import { formatCurrency, formatMonths } from './utils/roiCalculator';
 import type { AgentId, AgentStatus, AgentUpdate, PipelineOutput } from './lib/agentOrchestrator';
 
 // Leaflet is ~250 kB — lazy load so it doesn't bloat the initial bundle
-const SiteMap = lazy(() => import('./components/SiteMap').then((m) => ({ default: m.SiteMap })));
-const SiteMapPlaceholder = lazy(() => import('./components/SiteMap').then((m) => ({ default: m.SiteMapPlaceholder })));
+import { lazyWithReload } from './lib/lazyWithReload';
+const SiteMap = lazyWithReload(() => import('./components/SiteMap').then((m) => ({ default: m.SiteMap })));
+const SiteMapPlaceholder = lazyWithReload(() => import('./components/SiteMap').then((m) => ({ default: m.SiteMapPlaceholder })));
 
 // ─── Agent metadata (display only) ───────────────────────────────────────────
 
