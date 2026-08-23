@@ -6,6 +6,23 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   build: {
     chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // Split rarely-changing vendor code into stable, separately-cached
+        // chunks so an app-code change no longer invalidates ~178 KB of
+        // framework for returning visitors. recharts/leaflet are intentionally
+        // left unmatched so they stay in their own lazy route chunks.
+        // Function form (not object) — required by Vite 8's rolldown bundler.
+        manualChunks(id) {
+          if (!id.includes('/node_modules/')) return;
+          if (id.includes('/node_modules/react-dom/') ||
+              id.includes('/node_modules/react/') ||
+              id.includes('/node_modules/scheduler/')) return 'react-vendor';
+          if (id.includes('/node_modules/@supabase/')) return 'supabase-vendor';
+          if (id.includes('/node_modules/framer-motion/')) return 'motion-vendor';
+        },
+      },
+    },
   },
   plugins: [
     tailwindcss(),

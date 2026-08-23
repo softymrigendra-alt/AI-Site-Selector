@@ -217,12 +217,19 @@ export async function runAgentPipeline(
   const tick = (agentId: AgentId, status: AgentStatus, data?: AgentResult, error?: string, durationMs?: number) =>
     onUpdate({ agentId, status, data, error, durationMs });
 
+  // The utility-rate fetch only needs geo.state, so we start it the moment
+  // geocoding resolves and let it run in parallel with the chargers/EV batch,
+  // rather than blocking on that batch first. getElectricityRate never rejects
+  // (it degrades to null), so this promise is safe to hold across agents.
+  let ratePromise: Promise<ElectricityRate | null> = Promise.resolve(null);
+
   // ── Agent 1: Site Intelligence ────────────────────────────────────────────
   tick('site', 'running');
   const t1 = Date.now();
   let siteResult: SiteAgentResult;
   try {
     const geo = await geocodeAddress(address);
+    if (geo) ratePromise = getElectricityRate(geo.state);
     const [ocmStations, evReg] = await Promise.all([
       geo ? getGlobalChargers(geo.lat, geo.lng) : Promise.resolve([]),
       geo ? getEVRegistrations(geo.state, geo.zipCode) : Promise.resolve(null),
@@ -244,8 +251,8 @@ export async function runAgentPipeline(
   const t2 = Date.now();
   let utilityResult: UtilityAgentResult;
   try {
-    const stateName = siteResult.geo?.state ?? '';
-    const rate = await getElectricityRate(stateName);
+    // Already in flight since geocoding completed (see ratePromise above).
+    const rate = await ratePromise;
     utilityResult = { rate, ratePerKwh: rate?.ratePerKwh ?? 0.12 };
     const d2 = Date.now() - t2;
     tick('utility', 'done', utilityResult, undefined, d2);
