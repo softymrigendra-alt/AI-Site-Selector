@@ -5,7 +5,8 @@ import type { ComponentType, LazyExoticComponent } from 'react';
 // old index.html will fail to fetch the old chunks. Reload once to pick up the
 // new build instead of showing the error boundary. sessionStorage guards
 // against a reload loop if the fetch keeps failing for another reason.
-export function lazyWithReload<T extends ComponentType<unknown>>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyWithReload<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
 ): LazyExoticComponent<T> {
   return lazy(() =>

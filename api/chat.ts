@@ -1,4 +1,6 @@
 /// <reference types="node" />
+import { guard, corsHeaders } from './_guard';
+
 export const config = { runtime: 'edge' };
 
 interface ChatMessage {
@@ -84,17 +86,25 @@ function deterministicReply(userMsg: string, ctx: string): string {
 }
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  const g = await guard(req, { maxBodyBytes: 32 * 1024, rateLimit: 15, windowMs: 60_000 });
+  if (!g.ok) return g.response!;
+  const headers = corsHeaders(req);
 
-  let body: ChatRequest;
-  try {
-    body = await req.json() as ChatRequest;
-  } catch {
-    return new Response('Bad request', { status: 400 });
+  const body = g.body as ChatRequest;
+  let { messages, systemContext = '' } = body ?? {};
+  if (!messages?.length) {
+    return new Response(JSON.stringify({ error: 'No messages' }), { status: 400, headers });
   }
 
-  const { messages, systemContext = '' } = body;
-  if (!messages?.length) return new Response('No messages', { status: 400 });
+  // Cap conversation size and per-message length so the upstream prompt (and
+  // token spend) can't be inflated by a crafted request.
+  messages = messages
+    .slice(-12)
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: String(m.content ?? '').slice(0, 4000),
+    }));
+  systemContext = String(systemContext).slice(0, 6000);
 
   const system = `You are an EV charging site selection expert assistant. Answer concisely (2-4 sentences). Stay focused on EV charging economics, site viability, ROI, and regulatory context. Here is the current site analysis context:\n\n${systemContext}`;
 
@@ -113,7 +123,5 @@ export default async function handler(req: Request): Promise<Response> {
     reply = deterministicReply(lastUser, systemContext);
   }
 
-  return new Response(JSON.stringify({ reply }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return new Response(JSON.stringify({ reply }), { headers });
 }

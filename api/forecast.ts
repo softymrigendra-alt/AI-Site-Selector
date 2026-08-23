@@ -1,4 +1,6 @@
 /// <reference types="node" />
+import { guard, corsHeaders } from './_guard';
+
 export const config = { runtime: 'edge' };
 
 interface ForecastRequest {
@@ -150,20 +152,13 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
+  const g = await guard(request, { maxBodyBytes: 16 * 1024, rateLimit: 20, windowMs: 60_000 });
+  if (!g.ok) return g.response!;
+  const headers = corsHeaders(request);
 
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Content-Type': 'application/json',
-  };
-
-  let body: ForecastRequest;
-  try {
-    body = await request.json() as ForecastRequest;
-  } catch {
-    return new Response(JSON.stringify(FALLBACK), { status: 200, headers: corsHeaders });
+  const body = g.body as ForecastRequest;
+  if (!body?.siteInput || !body?.roiCalculation) {
+    return new Response(JSON.stringify(FALLBACK), { status: 200, headers });
   }
 
   const groqKey = process.env['GROQ_API_KEY'];
@@ -174,7 +169,7 @@ export default async function handler(request: Request): Promise<Response> {
   if (groqKey) {
     try {
       const result = await callGroq(prompt, groqKey);
-      return new Response(JSON.stringify(result), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify(result), { status: 200, headers });
     } catch (err) {
       console.error('Groq failed:', err);
     }
@@ -183,11 +178,11 @@ export default async function handler(request: Request): Promise<Response> {
   if (anthropicKey) {
     try {
       const result = await callAnthropic(prompt, anthropicKey);
-      return new Response(JSON.stringify(result), { status: 200, headers: corsHeaders });
+      return new Response(JSON.stringify(result), { status: 200, headers });
     } catch (err) {
       console.error('Anthropic failed:', err);
     }
   }
 
-  return new Response(JSON.stringify(FALLBACK), { status: 200, headers: corsHeaders });
+  return new Response(JSON.stringify(FALLBACK), { status: 200, headers });
 }

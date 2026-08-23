@@ -69,6 +69,14 @@ export async function getSession(): Promise<Session | null> {
   return data.session;
 }
 
+// Returns an Authorization header for the current session, or {} when signed
+// out / unconfigured. Attach to API calls so the Edge routes can verify the
+// caller when SUPABASE_JWT_SECRET is set.
+export async function authHeader(): Promise<Record<string, string>> {
+  const session = await getSession();
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+}
+
 export function onAuthStateChange(cb: (user: User | null) => void): () => void {
   if (!supabase) return () => {};
   const { data } = supabase.auth.onAuthStateChange((_event, session) => cb(session?.user ?? null));

@@ -43,10 +43,15 @@ export interface SaveSitePayload {
 
 // ─── SQL schema (run once in Supabase SQL editor) ─────────────────────────────
 //
+// Each row is owned by the authenticated user that created it. Row Level
+// Security scopes every read/write to auth.uid(), so one user can never see or
+// mutate another user's analyses even though they share the public anon key.
+//
 // create table if not exists site_analyses (
 //   id               uuid primary key default gen_random_uuid(),
 //   created_at       timestamptz not null default now(),
-//   user_id          text not null default 'anonymous',
+//   user_id          uuid not null references auth.users(id) on delete cascade
+//                      default auth.uid(),
 //   site_name        text not null,
 //   address          text,
 //   property_type    text,
@@ -60,15 +65,43 @@ export interface SaveSitePayload {
 //   status           text not null default 'analysed'
 // );
 // alter table site_analyses enable row level security;
-// create policy "anon read-write" on site_analyses for all using (true) with check (true);
+//
+// -- Drop the old wide-open policy if it exists.
+// drop policy if exists "anon read-write" on site_analyses;
+//
+// -- Owner-scoped policies: a user only ever touches their own rows.
+// create policy "own rows select" on site_analyses
+//   for select using (auth.uid() = user_id);
+// create policy "own rows insert" on site_analyses
+//   for insert with check (auth.uid() = user_id);
+// create policy "own rows update" on site_analyses
+//   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+// create policy "own rows delete" on site_analyses
+//   for delete using (auth.uid() = user_id);
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
+//
+// All writes stamp user_id from the live session; all reads/updates/deletes are
+// additionally enforced server-side by RLS, so a tampered client cannot reach
+// another user's data. Every call requires an authenticated user.
+
+async function currentUserId(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
 
 export async function saveSiteAnalysis(payload: SaveSitePayload): Promise<SiteAnalysis | null> {
   if (!supabase) return null;
 
+  const userId = await currentUserId();
+  if (!userId) {
+    console.warn('saveSiteAnalysis: not authenticated');
+    return null;
+  }
+
   const row = {
-    user_id: 'anonymous',
+    user_id: userId,
     site_name: payload.siteName,
     address: payload.siteInput.address,
     property_type: payload.siteInput.propertyType,
@@ -96,9 +129,14 @@ export async function saveSiteAnalysis(payload: SaveSitePayload): Promise<SiteAn
   return data as SiteAnalysis;
 }
 
-export async function getSiteAnalyses(userId = 'anonymous'): Promise<SiteAnalysis[]> {
+export async function getSiteAnalyses(): Promise<SiteAnalysis[]> {
   if (!supabase) return [];
 
+  const userId = await currentUserId();
+  if (!userId) return [];
+
+  // RLS already restricts rows to the current user; the explicit filter keeps
+  // the query index-friendly and makes the intent obvious.
   const { data, error } = await supabase
     .from('site_analyses')
     .select('*')

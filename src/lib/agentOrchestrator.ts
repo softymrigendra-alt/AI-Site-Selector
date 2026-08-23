@@ -5,6 +5,7 @@ import {
   getGlobalChargers,
 } from './externalAPIs';
 import { logAgentRun } from './agentLogger';
+import { authHeader } from './auth';
 import { calculateROI } from '../utils/roiCalculator';
 import type { GeoResult, CompetitorStation, ElectricityRate, EVRegistrationData, OpenChargeStation } from './externalAPIs';
 import type { ROIResult, ChargerType, DemandLevel, RiskLevel } from '../types';
@@ -144,7 +145,7 @@ async function callLeadQualificationLLM(
   try {
     const res = await fetch('/api/forecast', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({
         siteInput: {
           address,

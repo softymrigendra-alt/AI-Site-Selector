@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { calculateROI, formatCurrency, formatMonths, defaultCostInputs } from './utils/roiCalculator';
 import type { ROICostInputs } from './utils/roiCalculator';
 import { saveSiteAnalysis } from './lib/supabase';
+import { authHeader } from './lib/auth';
 import { Toast, useToast } from './components/Toast';
 import { ROIChatAssistant } from './components/ROIChatAssistant';
 import { withRetry, friendlyMessage } from './lib/retry';
@@ -20,7 +21,7 @@ async function fetchAIForecast(siteInput: SiteFormInput, roiCalculation: ROIResu
     return await withRetry(async () => {
       const res = await fetch('/api/forecast', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ siteInput, roiCalculation }),
         signal: AbortSignal.timeout(12000),
       });

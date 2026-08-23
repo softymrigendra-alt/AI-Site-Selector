@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { SiteResult } from '../types';
+import { authHeader } from '../lib/auth';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -62,7 +63,7 @@ export function ROIChatAssistant({ siteResult }: Props) {
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({
           messages: next.map((m) => ({ role: m.role, content: m.content })),
           systemContext: buildContext(siteResult),
