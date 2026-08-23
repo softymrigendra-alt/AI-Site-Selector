@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { runAgentPipeline } from './lib/agentOrchestrator';
+import { OCM_LIVE, EIA_KEY_LIVE } from './lib/externalAPIs';
 import { formatCurrency, formatMonths } from './utils/roiCalculator';
 import type { AgentId, AgentStatus, AgentUpdate, PipelineOutput } from './lib/agentOrchestrator';
 
@@ -18,7 +19,7 @@ interface AgentMeta {
 }
 
 const AGENT_META: AgentMeta[] = [
-  { id: 'site',    name: 'Site Intelligence',  icon: '🗺️', description: 'Geocoding address · fetching AFDC competitor stations · EV registrations', color: '#2563EB' },
+  { id: 'site',    name: 'Site Intelligence',  icon: '🗺️', description: 'Geocoding address · fetching OpenChargeMap competitor stations · EV registrations', color: '#2563EB' },
   { id: 'utility', name: 'Utility Rate',       icon: '⚡', description: 'Querying EIA for state commercial electricity $/kWh',                       color: '#0D9488' },
   { id: 'roi',     name: 'ROI Optimisation',   icon: '📈', description: 'Selecting optimal charger type & count · running ROI model',                 color: '#7C3AED' },
   { id: 'market',  name: 'Market Watch',       icon: '🔭', description: 'EV adoption trends · available grant programmes',                             color: '#D97706' },
@@ -123,6 +124,29 @@ function buildSummary(agentId: AgentId, data: AgentUpdate['data']): string {
   }
 }
 
+// ─── Data-source provenance row ───────────────────────────────────────────────
+// `live` = fetched from a real external API this run. Otherwise it's a curated
+// estimate/reference value — labelled honestly so the forecast stays credible.
+
+function SourceRow({ label, value, live, note }: { label: string; value: string; live: boolean; note: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+        style={live
+          ? { backgroundColor: '#F0FDF4', color: '#16A34A', border: '1px solid #86EFAC' }
+          : { backgroundColor: '#FEF9C3', color: '#A16207', border: '1px solid #FDE68A' }}
+      >
+        {live ? 'LIVE' : 'EST'}
+      </span>
+      <span style={{ color: 'var(--text-secondary)' }}>
+        <span className="font-medium">{label}:</span> {value}
+        <span style={{ color: 'var(--text-muted)' }}> · {note}</span>
+      </span>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 type Phase = 'idle' | 'running' | 'done' | 'error';
@@ -170,6 +194,8 @@ export default function V2Page() {
   const roi = output?.roi;
   const market = output?.market;
   const site = output?.site;
+  // True only when the EIA call actually returned live data this run (not the fallback object)
+  const eiaLive = EIA_KEY_LIVE && output?.utility.rate?.source === 'EIA Retail Sales';
   const completedCount = AGENT_META.filter(m => statuses[m.id] === 'done' || statuses[m.id] === 'failed').length;
 
   return (
@@ -210,7 +236,7 @@ export default function V2Page() {
         <div className="card p-12 flex flex-col items-center justify-center text-center" style={{ minHeight: '280px' }}>
           <span className="text-5xl mb-4">🤖</span>
           <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Enter an address to start the live pipeline</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Agents call AFDC, EIA, and Nominatim APIs in real time</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Agents call OpenChargeMap, EIA, and Nominatim APIs in real time</p>
         </div>
       )}
 
@@ -289,7 +315,7 @@ export default function V2Page() {
               <div>
                 <p className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>AI Confidence: {lead.confidenceLevel}%</p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Based on live data from 4 external sources and comparison against similar sites
+                  Based on live geocoding, LLM analysis and comparison against similar sites
                 </p>
               </div>
               <span className="text-xs px-3 py-1.5 rounded-full font-semibold flex-shrink-0"
@@ -327,10 +353,10 @@ export default function V2Page() {
               <h4 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>What AI found automatically</h4>
               <div className="space-y-2">
                 {[
-                  site?.geo ? `${site.geo.city}, ${site.geo.state} — location geocoded` : null,
-                  `${site?.nearbyCount ?? 0} competitor stations within 5 mi (AFDC live)`,
-                  site?.evRegistrations?.evCount ? `${site.evRegistrations.evCount.toLocaleString()} EV registrations in state` : null,
-                  `Live electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh${output.utility.rate?.source ? ` (${output.utility.rate.source})` : ' (estimate)'}`,
+                  site?.geo ? `${site.geo.city}, ${site.geo.state} — location geocoded (live)` : null,
+                  `${site?.nearbyCount ?? 0} competitor stations within 5 mi (OpenChargeMap — live)`,
+                  site?.evRegistrations?.evCount ? `${site.evRegistrations.evCount.toLocaleString()} EV registrations in state (estimate)` : null,
+                  `Electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh (${eiaLive ? 'EIA live' : 'US average estimate'})`,
                   `${roi.recommendedCount}× ${roi.recommendedType} optimal — ${Math.round((roi.roi.year1NetProfit / roi.roi.totalSetupCost) * 100)}% annual ROI`,
                 ].filter(Boolean).map((fact) => (
                   <div key={fact as string} className="flex items-start gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -369,32 +395,43 @@ export default function V2Page() {
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{lead.aiInsight}</p>
           </div>
 
-          {/* Live data sources */}
+          {/* Data sources — honest LIVE vs ESTIMATE provenance */}
           <div className="card p-4">
-            <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Live Data Sources</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Data Sources</h4>
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                <span style={{ color: '#16A34A' }}>LIVE</span> = fetched this run · <span style={{ color: '#A16207' }}>EST</span> = curated estimate
+              </span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               {site?.geo && (
-                <div className="flex items-center gap-2">
-                  <span className="text-green-500 font-bold">✓</span>
-                  <span style={{ color: 'var(--text-secondary)' }}><span className="font-medium">Location:</span> {site.geo.city}, {site.geo.state}</span>
-                </div>
+                <SourceRow label="Location" value={`${site.geo.city}, ${site.geo.state}`} live={true} note="Nominatim / OSM" />
               )}
-              <div className="flex items-center gap-2">
-                <span className="text-green-500 font-bold">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}><span className="font-medium">Competitors:</span> {site?.nearbyCount ?? 0} within 5 miles (AFDC)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-green-500 font-bold">✓</span>
-                <span style={{ color: 'var(--text-secondary)' }}><span className="font-medium">EV registrations:</span> {(site?.evRegistrations?.evCount ?? 0).toLocaleString()} (DOE)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={output.utility.rate ? 'text-green-500 font-bold' : 'text-amber-500 font-bold'}>{output.utility.rate ? '✓' : '~'}</span>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                  <span className="font-medium">Electricity:</span> ${output.utility.ratePerKwh.toFixed(3)}/kWh
-                  {output.utility.rate?.source ? ` (${output.utility.rate.source})` : ' (estimate)'}
-                </span>
-              </div>
+              <SourceRow
+                label="Competitors"
+                value={`${site?.nearbyCount ?? 0} within 5 mi`}
+                live={OCM_LIVE}
+                note="OpenChargeMap (800k+ stations globally)"
+              />
+              <SourceRow
+                label="EV registrations"
+                value={(site?.evRegistrations?.evCount ?? 0).toLocaleString()}
+                live={false}
+                note="state-level reference"
+              />
+              <SourceRow
+                label="Electricity"
+                value={`$${output.utility.ratePerKwh.toFixed(3)}/kWh`}
+                live={eiaLive}
+                note={eiaLive ? 'EIA Retail Sales' : 'US average estimate'}
+              />
+              <SourceRow label="Grants" value={market.grantValue} live={false} note="NEVI / IRA reference" />
             </div>
+            {!eiaLive && (
+              <p className="text-[11px] mt-3 pt-2.5 border-t" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                Some sources use curated estimates.{!eiaLive ? ' Add an EIA API key to upgrade electricity rates to live data.' : ''}
+              </p>
+            )}
           </div>
 
           {/* Map */}
@@ -427,10 +464,10 @@ export default function V2Page() {
             <p className="text-xs font-bold uppercase tracking-widest mb-2.5" style={{ color: '#60A5FA' }}>What V2 found that V1 couldn't</p>
             <div className="flex flex-wrap gap-2">
               {[
-                `Live electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh`,
-                `${site?.nearbyCount ?? 0} real competitor stations (AFDC)`,
+                `${eiaLive ? 'Live' : 'Est.'} electricity: $${output.utility.ratePerKwh.toFixed(3)}/kWh`,
+                `${site?.nearbyCount ?? 0} competitor stations (OpenChargeMap live)`,
                 `Optimal mix: ${roi.recommendedCount}× ${roi.recommendedType}`,
-                `${(site?.evRegistrations?.evCount ?? 0).toLocaleString()} EVs registered nearby`,
+                `${(site?.evRegistrations?.evCount ?? 0).toLocaleString()} EVs registered in state`,
               ].map((fact) => (
                 <span key={fact} className="text-xs px-2.5 py-1 rounded-full font-medium" style={{ backgroundColor: 'rgba(37,99,235,0.15)', color: '#93C5FD', border: '1px solid rgba(37,99,235,0.3)' }}>
                   ✓ {fact}

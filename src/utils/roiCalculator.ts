@@ -29,21 +29,55 @@ const PERMIT_COST = 2500;
 const UTILIZATION_RATE = 0.65;
 const MONTHLY_SOFTWARE_FEE = 30;
 
-export function calculateROI(input: Pick<SiteFormInput, 'chargerType' | 'targetChargers'>): ROIResult {
-  const { chargerType, targetChargers } = input;
+// All cost/revenue assumptions behind an ROI calculation. Defaults come from
+// CHARGER_CONFIG + the site-level constants above, but every field can be
+// overridden by the user in the "Cost Inputs" panel.
+export interface ROICostInputs {
+  hardwareCost: number;        // $ per charger
+  installCost: number;         // $ per charger
+  revenuePerSession: number;   // $ per session
+  sessionsPerDay: number;      // sessions per charger per day
+  monthlyMaintenance: number;  // $ per charger per month
+  utilizationRate: number;     // 0–1
+  sitePrep: number;            // $ one-time
+  permits: number;             // $ one-time
+  softwareFee: number;         // $ per charger per month
+}
+
+// Suggested defaults for a given charger type — used to pre-fill the editable
+// cost inputs and as fallbacks when a field isn't overridden.
+export function defaultCostInputs(chargerType: ChargerType): ROICostInputs {
   const cfg = CHARGER_CONFIG[chargerType];
   if (!cfg) throw new Error(`Unknown charger type: ${chargerType}`);
+  return {
+    hardwareCost: cfg.hardwareCost,
+    installCost: cfg.installCost,
+    revenuePerSession: cfg.revenuePerSession,
+    sessionsPerDay: cfg.sessionsPerDay,
+    monthlyMaintenance: cfg.monthlyMaintenance,
+    utilizationRate: UTILIZATION_RATE,
+    sitePrep: SITE_PREP_COST,
+    permits: PERMIT_COST,
+    softwareFee: MONTHLY_SOFTWARE_FEE,
+  };
+}
 
-  const n = Number(targetChargers);
+export function calculateROI(
+  input: Pick<SiteFormInput, 'chargerType' | 'targetChargers'>,
+  costs?: Partial<ROICostInputs>,
+): ROIResult {
+  const c = { ...defaultCostInputs(input.chargerType), ...costs };
+
+  const n = Number(input.targetChargers);
 
   const totalSetupCost =
-    (cfg.hardwareCost + cfg.installCost) * n + SITE_PREP_COST + PERMIT_COST;
+    (c.hardwareCost + c.installCost) * n + c.sitePrep + c.permits;
 
   const monthlyGrossRevenue =
-    n * cfg.revenuePerSession * cfg.sessionsPerDay * 30 * UTILIZATION_RATE;
+    n * c.revenuePerSession * c.sessionsPerDay * 30 * c.utilizationRate;
 
   const monthlyOpEx =
-    (cfg.monthlyMaintenance + MONTHLY_SOFTWARE_FEE) * n;
+    (c.monthlyMaintenance + c.softwareFee) * n;
 
   const monthlyNetRevenue = monthlyGrossRevenue - monthlyOpEx;
 

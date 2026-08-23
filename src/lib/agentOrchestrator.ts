@@ -1,13 +1,26 @@
 import {
   geocodeAddress,
-  getCompetitorStations,
   getElectricityRate,
   getEVRegistrations,
   getGlobalChargers,
 } from './externalAPIs';
+import { logAgentRun } from './agentLogger';
 import { calculateROI } from '../utils/roiCalculator';
-import type { GeoResult, CompetitorStation, ElectricityRate, EVRegistrationData } from './externalAPIs';
+import type { GeoResult, CompetitorStation, ElectricityRate, EVRegistrationData, OpenChargeStation } from './externalAPIs';
 import type { ROIResult, ChargerType, DemandLevel, RiskLevel } from '../types';
+
+function ocmToCompetitor(s: OpenChargeStation): CompetitorStation {
+  const isDCFast = s.connectionTypes.some((t) => /chademo|ccs|dc.fast|level.3/i.test(t));
+  return {
+    name: s.name,
+    network: s.operator,
+    distanceMiles: +(s.distanceKm * 0.621371).toFixed(2),
+    chargerType: isDCFast ? 'DC Fast' : 'Level 2',
+    portCount: s.connectionTypes.length || 1,
+    lat: s.lat,
+    lng: s.lng,
+  };
+}
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -118,7 +131,7 @@ function chooseChargerType(
 async function callLeadQualificationLLM(
   address: string,
   site: SiteAgentResult,
-  utility: UtilityAgentResult,
+  _utility: UtilityAgentResult,
   roi: ROIAgentResult,
   market: MarketAgentResult,
 ): Promise<LeadAgentResult> {
@@ -209,15 +222,20 @@ export async function runAgentPipeline(
   let siteResult: SiteAgentResult;
   try {
     const geo = await geocodeAddress(address);
-    const [competitors, evReg] = await Promise.all([
-      geo ? getCompetitorStations(geo.lat, geo.lng) : Promise.resolve([]),
+    const [ocmStations, evReg] = await Promise.all([
+      geo ? getGlobalChargers(geo.lat, geo.lng) : Promise.resolve([]),
       geo ? getEVRegistrations(geo.state, geo.zipCode) : Promise.resolve(null),
     ]);
+    const competitors = ocmStations.map(ocmToCompetitor);
     siteResult = { geo, competitors, evRegistrations: evReg, nearbyCount: competitors.length };
-    tick('site', 'done', siteResult, undefined, Date.now() - t1);
+    const d1 = Date.now() - t1;
+    tick('site', 'done', siteResult, undefined, d1);
+    logAgentRun({ timestamp: Date.now(), agentId: 'site', status: 'done', durationMs: d1, address });
   } catch (e) {
+    const d1 = Date.now() - t1;
     siteResult = { geo: null, competitors: [], evRegistrations: null, nearbyCount: 0 };
-    tick('site', 'failed', undefined, String(e), Date.now() - t1);
+    tick('site', 'failed', undefined, String(e), d1);
+    logAgentRun({ timestamp: Date.now(), agentId: 'site', status: 'failed', durationMs: d1, address, error: String(e) });
   }
 
   // ── Agent 2: Utility Rate ─────────────────────────────────────────────────
@@ -227,14 +245,15 @@ export async function runAgentPipeline(
   try {
     const stateName = siteResult.geo?.state ?? '';
     const rate = await getElectricityRate(stateName);
-    utilityResult = {
-      rate,
-      ratePerKwh: rate?.ratePerKwh ?? 0.12,
-    };
-    tick('utility', 'done', utilityResult, undefined, Date.now() - t2);
+    utilityResult = { rate, ratePerKwh: rate?.ratePerKwh ?? 0.12 };
+    const d2 = Date.now() - t2;
+    tick('utility', 'done', utilityResult, undefined, d2);
+    logAgentRun({ timestamp: Date.now(), agentId: 'utility', status: 'done', durationMs: d2, address });
   } catch (e) {
+    const d2 = Date.now() - t2;
     utilityResult = { rate: null, ratePerKwh: 0.12 };
-    tick('utility', 'failed', undefined, String(e), Date.now() - t2);
+    tick('utility', 'failed', undefined, String(e), d2);
+    logAgentRun({ timestamp: Date.now(), agentId: 'utility', status: 'failed', durationMs: d2, address, error: String(e) });
   }
 
   // ── Agent 3: ROI Optimisation ─────────────────────────────────────────────
@@ -245,17 +264,16 @@ export async function runAgentPipeline(
     const evCount = siteResult.evRegistrations?.evCount ?? 30000;
     const chosen = chooseChargerType(siteResult.competitors, evCount);
     const roi = calculateROI({ chargerType: chosen.type, targetChargers: chosen.count });
-    roiResult = {
-      recommendedType: chosen.type,
-      recommendedCount: chosen.count,
-      reasoning: chosen.reasoning,
-      roi,
-    };
-    tick('roi', 'done', roiResult, undefined, Date.now() - t3);
+    roiResult = { recommendedType: chosen.type, recommendedCount: chosen.count, reasoning: chosen.reasoning, roi };
+    const d3 = Date.now() - t3;
+    tick('roi', 'done', roiResult, undefined, d3);
+    logAgentRun({ timestamp: Date.now(), agentId: 'roi', status: 'done', durationMs: d3, address });
   } catch (e) {
+    const d3 = Date.now() - t3;
     const roi = calculateROI({ chargerType: 'DC Fast', targetChargers: 4 });
     roiResult = { recommendedType: 'DC Fast', recommendedCount: 4, reasoning: 'Default recommendation.', roi };
-    tick('roi', 'failed', undefined, String(e), Date.now() - t3);
+    tick('roi', 'failed', undefined, String(e), d3);
+    logAgentRun({ timestamp: Date.now(), agentId: 'roi', status: 'failed', durationMs: d3, address, error: String(e) });
   }
 
   // ── Agent 4: Market Watch ─────────────────────────────────────────────────
@@ -263,29 +281,28 @@ export async function runAgentPipeline(
   const t4 = Date.now();
   let marketResult: MarketAgentResult;
   try {
-    // Augment with OpenChargeMap for richer competitor data (optional)
-    if (siteResult.geo) {
-      await getGlobalChargers(siteResult.geo.lat, siteResult.geo.lng);
-    }
+    if (siteResult.geo) await getGlobalChargers(siteResult.geo.lat, siteResult.geo.lng);
     const stateCode = siteResult.geo?.state?.toUpperCase().slice(0, 2) ?? 'US';
     const highEVStates = ['CA', 'WA', 'OR', 'CO', 'NY', 'MA', 'NJ'];
-    const growthRate = highEVStates.includes(stateCode) ? '38% YoY' : '24% YoY';
-
     marketResult = {
-      evGrowthRate: growthRate,
+      evGrowthRate: highEVStates.includes(stateCode) ? '38% YoY' : '24% YoY',
       availableGrants: ['NEVI Formula Program', 'IRA Section 30C Tax Credit'],
       grantValue: '$30,000–$100,000 potential',
       peakDemand: 'Weekday evenings (5–9 PM) & weekend afternoons',
     };
-    tick('market', 'done', marketResult, undefined, Date.now() - t4);
+    const d4 = Date.now() - t4;
+    tick('market', 'done', marketResult, undefined, d4);
+    logAgentRun({ timestamp: Date.now(), agentId: 'market', status: 'done', durationMs: d4, address });
   } catch (e) {
+    const d4 = Date.now() - t4;
     marketResult = {
       evGrowthRate: '24% YoY',
       availableGrants: ['NEVI Formula Program'],
       grantValue: '$30,000 potential',
       peakDemand: 'Weekday evenings',
     };
-    tick('market', 'failed', undefined, String(e), Date.now() - t4);
+    tick('market', 'failed', undefined, String(e), d4);
+    logAgentRun({ timestamp: Date.now(), agentId: 'market', status: 'failed', durationMs: d4, address, error: String(e) });
   }
 
   // ── Agent 5: Lead Qualification (LLM) ────────────────────────────────────
@@ -294,17 +311,17 @@ export async function runAgentPipeline(
   let leadResult: LeadAgentResult;
   try {
     leadResult = await callLeadQualificationLLM(address, siteResult, utilityResult, roiResult, marketResult);
-    tick('lead', 'done', leadResult, undefined, Date.now() - t5);
+    const d5 = Date.now() - t5;
+    tick('lead', 'done', leadResult, undefined, d5);
+    logAgentRun({ timestamp: Date.now(), agentId: 'lead', status: 'done', durationMs: d5, address });
   } catch (e) {
+    const d5 = Date.now() - t5;
     leadResult = {
-      siteScore: 65,
-      confidenceLevel: 60,
-      evDemandLevel: 'medium',
-      competitorRisk: 'medium',
-      aiInsight: buildFallbackInsight(address, roiResult, marketResult),
-      qualification: 'moderate',
+      siteScore: 65, confidenceLevel: 60, evDemandLevel: 'medium', competitorRisk: 'medium',
+      aiInsight: buildFallbackInsight(address, roiResult, marketResult), qualification: 'moderate',
     };
-    tick('lead', 'failed', undefined, String(e), Date.now() - t5);
+    tick('lead', 'failed', undefined, String(e), d5);
+    logAgentRun({ timestamp: Date.now(), agentId: 'lead', status: 'failed', durationMs: d5, address, error: String(e) });
   }
 
   return { site: siteResult, utility: utilityResult, roi: roiResult, market: marketResult, lead: leadResult };

@@ -3,6 +3,15 @@
 
 const TIMEOUT_MS = 5000;
 
+// ─── Provenance flags ─────────────────────────────────────────────────────────
+// Whether a *real* (non-demo) API key is configured. Drives honest LIVE vs
+// ESTIMATE labelling in the UI so we never claim live data we don't have.
+export const AFDC_KEY_LIVE =
+  ((import.meta.env['VITE_AFDC_API_KEY'] as string | undefined) ?? 'DEMO_KEY') !== 'DEMO_KEY';
+export const EIA_KEY_LIVE = !!(import.meta.env['VITE_EIA_API_KEY'] as string | undefined);
+// OpenChargeMap works without any API key — competitor data is always live
+export const OCM_LIVE = true;
+
 function withTimeout<T>(promise: Promise<T>, ms = TIMEOUT_MS): Promise<T> {
   return Promise.race([
     promise,
@@ -162,24 +171,30 @@ export async function getElectricityRate(stateName: string): Promise<Electricity
   }
   const stateCode = STATE_ABBREV[stateName] ?? stateName.toUpperCase().slice(0, 2);
   try {
-    const params = new URLSearchParams({
-      api_key: apiKey,
-      frequency: 'annual',
-      data: 'price',
-      facets: `[{"stateid":"${stateCode}"},{"sectorid":"COM"}]`,
-      sort: '[{"column":"period","direction":"desc"}]',
-      length: '1',
-    });
+    // EIA API v2 requires bracketed array params: data[0]=price, facets[stateid][]=IL, etc.
+    // (The v1-style facets=[{...}] form returns HTTP 400.)
+    const params = new URLSearchParams();
+    params.set('api_key', apiKey);
+    params.set('frequency', 'annual');
+    params.append('data[0]', 'price');
+    params.append('facets[stateid][]', stateCode);
+    params.append('facets[sectorid][]', 'COM');
+    params.append('sort[0][column]', 'period');
+    params.append('sort[0][direction]', 'desc');
+    params.set('length', '1');
+    // EIA's first (uncached) response for a state can exceed the default 5s —
+    // give it 9s so the first query for any state reliably lands live data.
     const res = await withTimeout(
       fetch(`https://api.eia.gov/v2/electricity/retail-sales/data/?${params.toString()}`),
+      9000,
     );
     if (!res.ok) return null;
     const json = await res.json() as {
-      response?: { data?: Array<{ price: number; period: string }> };
+      response?: { data?: Array<{ price: number | string; period: string }> };
     };
     const row = json.response?.data?.[0];
-    if (!row) return null;
-    const rate = row.price / 100; // EIA returns cents/kWh
+    if (row?.price == null) return null;
+    const rate = Number(row.price) / 100; // EIA returns cents/kWh (as a string)
     return {
       ratePerKwh: rate,
       peakRatePerKwh: +(rate * 1.5).toFixed(4),

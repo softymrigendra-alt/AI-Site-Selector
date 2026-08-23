@@ -1,35 +1,27 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { branding } from './config/branding';
 import V1Page from './V1Page';
 import V2Page from './V2Page';
 import MySitesPage from './pages/MySitesPage';
-import AdminPage from './pages/AdminPage';
 import { AuthModal } from './components/AuthModal';
-import { OnlineIndicator } from './components/OnlineIndicator';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useAuth } from './hooks/useAuth';
-import { signOut } from './lib/auth';
+import { signOut, onPasswordRecovery } from './lib/auth';
 import { TabPanel } from './components/AnimatedCard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AnimatePresence } from 'framer-motion';
 
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const AdminPage   = lazy(() => import('./pages/AdminPage'));
 
 type TabId = 'v1' | 'v2' | 'sites' | 'reports' | 'admin';
 
-interface Tab {
-  id: TabId;
-  icon: string;
-  label: string;
-  sublabel: string;
-}
-
-const TABS: Tab[] = [
-  { id: 'v1',      icon: '⚡', label: 'Forecast',  sublabel: 'Manual analysis' },
-  { id: 'v2',      icon: '🤖', label: 'AI Agents', sublabel: 'Live pipeline' },
-  { id: 'sites',   icon: '📋', label: 'My Sites',  sublabel: 'Saved' },
-  { id: 'reports', icon: '📊', label: 'Reports',   sublabel: 'Analytics' },
-  { id: 'admin',   icon: '🔍', label: 'Monitor',   sublabel: 'Health' },
+const TABS: { id: TabId; label: string; beta?: boolean }[] = [
+  { id: 'v1',      label: 'V1 — Site Analyser' },
+  { id: 'v2',      label: 'V2 — Agentic AI',  beta: true },
+  { id: 'sites',   label: 'My Sites' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'admin',   label: 'Monitor' },
 ];
 
 export default function App() {
@@ -37,35 +29,38 @@ export default function App() {
   const { isDark, setTheme } = useDarkMode();
   const { user } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+
+  // When the user returns via a password-reset link, open the modal in
+  // "set new password" mode automatically.
+  useEffect(() => onPasswordRecovery(() => { setRecovering(true); setShowAuth(true); }), []);
 
   return (
     <div className="min-h-screen app-bg">
-      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} />}
+      {showAuth && (
+        <AuthModal
+          initialMode={recovering ? 'update' : 'signin'}
+          onClose={() => { setShowAuth(false); setRecovering(false); }}
+          onSuccess={() => { setShowAuth(false); setRecovering(false); }}
+        />
+      )}
 
       {/* ── Header ────────────────────────────────────────────── */}
-      <header className="header-gradient relative overflow-hidden">
-        {/* Subtle grid overlay */}
-        <div className="absolute inset-0 opacity-5" style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-          backgroundSize: '32px 32px'
-        }} />
-
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+      <header className="header-gradient">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between py-4">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-lg" style={{ background: 'linear-gradient(135deg,#3B82F6,#06B6D4)' }}>
-                ⚡
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#185FA5' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                  <path d="M13 2L4 14h8l-1 8 10-13h-8l1-7z" />
+                </svg>
               </div>
-              <div>
-                <h1 className="text-base font-bold text-white leading-tight tracking-tight">{branding.companyName}</h1>
-                <p className="text-xs leading-tight" style={{ color: '#93C5FD' }}>{branding.tagline}</p>
-              </div>
+              <h1 className="text-base font-bold text-white leading-tight tracking-tight">{branding.companyName}</h1>
             </div>
 
             {/* Right controls */}
-            <div className="flex items-center gap-2">
-              <OnlineIndicator />
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setTheme(isDark ? 'light' : 'dark')}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors hover:bg-white/10"
@@ -75,58 +70,45 @@ export default function App() {
               </button>
               {user ? (
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                    <div className="w-5 h-5 rounded-full bg-blue-400 flex items-center justify-center text-xs text-white font-bold">
-                      {user.email?.[0]?.toUpperCase() ?? 'U'}
-                    </div>
-                    <span className="text-xs text-blue-100 max-w-[110px] truncate">{user.email}</span>
-                  </div>
-                  <button
-                    onClick={() => signOut()}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors text-blue-200 hover:text-white hover:bg-white/10"
-                  >
+                  <span className="text-xs hidden sm:block" style={{ color: '#93C5FD' }}>{user.email}</span>
+                  <button onClick={() => signOut()} className="text-xs px-3 py-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition-colors">
                     Sign out
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => setShowAuth(true)}
-                  className="text-xs px-4 py-2 rounded-lg font-semibold transition-all border text-white hover:bg-white hover:text-blue-700"
-                  style={{ borderColor: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.1)' }}
+                  className="text-xs px-4 py-1.5 rounded-lg font-semibold text-white border border-white/30 hover:bg-white/10 transition-colors"
                 >
                   Sign in
                 </button>
               )}
+              <span className="text-xs px-2 py-1 rounded-full font-medium hidden sm:block" style={{ color: '#93C5FD', backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                {branding.tagline}
+              </span>
             </div>
-          </div>
-
-          {/* Hero strip */}
-          <div className="pb-5 pt-1">
-            <p className="text-2xl sm:text-3xl font-bold text-white leading-tight">
-              Find your next <span style={{ color: '#67E8F9' }}>EV charging site</span>
-            </p>
-            <p className="text-sm mt-1" style={{ color: '#93C5FD' }}>
-              AI-powered ROI forecasting · live market data · 5-agent analysis pipeline
-            </p>
           </div>
         </div>
       </header>
 
       {/* ── Tab bar ───────────────────────────────────────────── */}
-      <div className="tab-bar sticky top-0 z-30 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <nav className="flex gap-1 overflow-x-auto no-scrollbar">
+      <div className="tab-bar sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <nav className="flex overflow-x-auto no-scrollbar">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`tab-btn flex-shrink-0 flex items-center gap-1.5 px-4 py-3.5 text-sm font-medium transition-all focus:outline-none border-b-2 ${
+                className={`tab-btn flex-shrink-0 flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all focus:outline-none border-b-[3px] ${
                   activeTab === tab.id ? 'tab-active' : 'tab-inactive'
                 }`}
               >
-                <span className="text-base leading-none">{tab.icon}</span>
-                <span className="font-semibold">{tab.label}</span>
-                <span className="hidden md:block text-xs opacity-60">· {tab.sublabel}</span>
+                {tab.label}
+                {tab.beta && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                    Beta
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -134,27 +116,33 @@ export default function App() {
       </div>
 
       {/* ── Main content ──────────────────────────────────────── */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <ErrorBoundary>
           <AnimatePresence mode="wait">
-            {activeTab === 'v1'      && <TabPanel tabKey="v1"><V1Page /></TabPanel>}
-            {activeTab === 'v2'      && <TabPanel tabKey="v2"><V2Page /></TabPanel>}
-            {activeTab === 'sites'   && <TabPanel tabKey="sites"><MySitesPage onGoAnalyse={() => setActiveTab('v1')} /></TabPanel>}
+            {activeTab === 'v1'    && <TabPanel tabKey="v1"><V1Page /></TabPanel>}
+            {activeTab === 'v2'    && <TabPanel tabKey="v2"><V2Page /></TabPanel>}
+            {activeTab === 'sites' && (
+              <TabPanel tabKey="sites">
+                <MySitesPage onGoAnalyse={() => setActiveTab('v1')} />
+              </TabPanel>
+            )}
             {activeTab === 'reports' && (
               <TabPanel tabKey="reports">
-                <Suspense fallback={<div className="text-center py-20 text-gray-400 text-sm">Loading charts…</div>}>
+                <Suspense fallback={<div className="text-center py-16 text-sm" style={{ color: '#9CA3AF' }}>Loading Reports…</div>}>
                   <ReportsPage />
                 </Suspense>
               </TabPanel>
             )}
-            {activeTab === 'admin' && <TabPanel tabKey="admin"><AdminPage /></TabPanel>}
+            {activeTab === 'admin' && (
+              <TabPanel tabKey="admin">
+                <Suspense fallback={<div className="text-center py-16 text-sm" style={{ color: '#9CA3AF' }}>Loading Monitor…</div>}>
+                  <AdminPage />
+                </Suspense>
+              </TabPanel>
+            )}
           </AnimatePresence>
         </ErrorBoundary>
       </main>
-
-      <footer className="text-center text-xs py-8" style={{ color: 'var(--text-muted)' }}>
-        EV Site Selector · Built with React + Vite + TypeScript + Groq AI
-      </footer>
     </div>
   );
 }
